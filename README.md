@@ -10,3 +10,7 @@ The src is here: https://github.com/paulparkinson/oracle-ai-for-sustainable-dev
 
 The blog on setting up the exhibit on a cloud compute instance will be here tomorrow...
 
+
+This repos...
+![aiholo repos qr code](images/bit.ly_interactive-ai-holograms.png "Title")
+

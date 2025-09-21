@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>WAV Player Client</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 24px; }
+    label { display:block; margin:.5rem 0 .25rem; }
+    input, select, button { font-size: 1rem; padding:.5rem; }
+    .row { margin: .75rem 0; }
+    pre { background:#f6f6f6; padding:12px; border-radius:8px; }
+  </style>
+</head>
+<body>
+  <h1>WAV Player (Spring REST)</h1>
+
+  <div class="row">
+    <label for="path">WAV file path</label>
+    <input id="path" type="text" size="80" 
+    placeholder="C:\\src\\github.com\\paulparkinson\\interactive-ai-holograms\\latest-version\\src\\main\\resources\\static\\audio-aiholo\\explainer.wav">
+  </div>
+
+  <div class="row">
+    <label for="mixer">Target mixer (optional; e.g., 'VoiceMeeter', 'CABLE', 'Realtek')</label>
+    <input id="mixer" type="text" size="40" placeholder="VoiceMeeter">
+    <button id="listMixers">List Mixers</button>
+  </div>
+
+  <div class="row">
+    <button id="play">Play (Path)</button>
+    <button id="stop">Stop</button>
+    <button id="status">Status</button>
+  </div>
+
+  <hr style="margin: 2rem 0;">
+  
+  <h2>Simple Play (No Parameters)</h2>
+  <div class="row">
+    <button id="playSimple">Play Explainer.wav</button>
+  </div>
+
+  <hr style="margin: 2rem 0;">
+  
+  <h2>Upload & Play WAV File</h2>
+  
+  <div class="row">
+    <label for="fileUpload">Choose WAV file to upload and play</label>
+    <input id="fileUpload" type="file" accept=".wav" />
+  </div>
+
+  <div class="row">
+    <label for="mixerUpload">Target mixer (optional; e.g., 'VoiceMeeter', 'CABLE', 'Realtek')</label>
+    <input id="mixerUpload" type="text" size="40" placeholder="VoiceMeeter">
+  </div>
+
+  <div class="row">
+    <button id="playUpload">Upload & Play</button>
+  </div>
+
+  <pre id="out"></pre>
+
+  <script>
+    const API = "http://localhost:8080/api/audio";
+    const out = document.getElementById('out');
+
+    function log(obj) {
+      out.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
+    }
+
+    document.getElementById('play').onclick = async () => {
+      const path = document.getElementById('path').value.trim();
+      const mixer = document.getElementById('mixer').value.trim();
+      if (!path) return log("Please enter a WAV file path");
+      try {
+        const res = await fetch(`${API}/play`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ path, mixer })
+        });
+        log(await res.json());
+      } catch (e) { log(e.toString()); }
+    };
+
+    document.getElementById('stop').onclick = async () => {
+      try {
+        const res = await fetch(`${API}/stop`, { method: 'GET' });
+        log(await res.json());
+      } catch (e) { log(e.toString()); }
+    };
+
+    document.getElementById('status').onclick = async () => {
+      try {
+        const res = await fetch(`${API}/status`);
+        log(await res.json());
+      } catch (e) { log(e.toString()); }
+    };
+
+    document.getElementById('listMixers').onclick = async () => {
+      try {
+        const res = await fetch(`${API}/mixers`);
+        log(await res.json());
+      } catch (e) { log(e.toString()); }
+    };
+
+    document.getElementById('playSimple').onclick = async () => {
+      try {
+        const res = await fetch(`${API}/play-simple`, { method: 'GET' });
+        log(await res.json());
+      } catch (e) { log(e.toString()); }
+    };
+
+    document.getElementById('playUpload').onclick = async () => {
+      const fileInput = document.getElementById('fileUpload');
+      const mixerUpload = document.getElementById('mixerUpload').value.trim();
+      
+      if (!fileInput.files.length) {
+        return log("Please select a WAV file to upload");
+      }
+      
+      const file = fileInput.files[0];
+      if (!file.name.toLowerCase().endsWith('.wav')) {
+        return log("Please select a .wav file");
+      }
+      
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (mixerUpload) {
+          formData.append('mixer', mixerUpload);
+        }
+        
+        const res = await fetch(`${API}/play-upload`, {
+          method: 'POST',
+          body: formData
+        });
+        log(await res.json());
+      } catch (e) { 
+        log(e.toString()); 
+      }
+    };
+  </script>
+</body>
+</html>

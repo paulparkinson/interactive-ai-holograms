@@ -1,5 +1,5 @@
 # Local configuration files
-run_aiholo.ps1
+build_and_run.ps1
 
 # Temporary Builds
 grabdish/inventory-micronaut/build/

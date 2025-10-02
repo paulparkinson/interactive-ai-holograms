@@ -14,9 +14,20 @@ public class DataSourceConfiguration {
     @Bean
     public DataSource dataSource() throws SQLException {
         OracleDataSource dataSource = new OracleDataSource();
-        dataSource.setUser("moviestream");
-        dataSource.setPassword("Welcome12345");
-        dataSource.setURL("jdbc:oracle:thin:@selectaidb_high?TNS_ADMIN=C:/Users/paulp/Downloads/Wallet_SelectAIDB");
+        
+        // Get database configuration from environment variables
+        String dbUser = System.getenv("DB_USER");
+        String dbPassword = System.getenv("DB_PASSWORD");
+        String dbUrl = System.getenv("DB_URL");
+        
+        if (dbUser == null || dbPassword == null || dbUrl == null) {
+            throw new RuntimeException("Database configuration missing. Please set DB_USER, DB_PASSWORD, and DB_URL environment variables.");
+        }
+        
+        dataSource.setUser(dbUser);
+        dataSource.setPassword(dbPassword);
+        dataSource.setURL(dbUrl);
+        
 //        try (Connection connection = dataSource.getConnection()) {
 //            System.out.println("✅ Successfully connected to Oracle DB: " + connection.getMetaData().getDatabaseProductVersion());
 //        }

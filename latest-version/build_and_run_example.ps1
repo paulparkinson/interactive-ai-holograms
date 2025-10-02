@@ -11,6 +11,9 @@ $env:LANGFLOW_SERVER_URL = "http://YOUR_LANGFLOW_SERVER:7860/api"
 $env:LANGFLOW_FLOW_ID = "your-langflow-flow-id-here"
 $env:LANGFLOW_API_KEY = "sk-YOUR_LANGFLOW_API_KEY_HERE"
 $env:IS_AUDIO2FACE = "false"
+$env:DB_USER = "YOUR_DATABASE_USERNAME"
+$env:DB_PASSWORD = "YOUR_DATABASE_PASSWORD"
+$env:DB_URL = "jdbc:oracle:thin:@YOUR_DB_SERVICE?TNS_ADMIN=C:/path/to/your/wallet"
 
 # Build and run the application
 mvn clean package

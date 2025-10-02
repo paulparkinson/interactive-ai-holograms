@@ -12,6 +12,9 @@ set LANGFLOW_SERVER_URL=http://YOUR_LANGFLOW_SERVER:7860/api
 set LANGFLOW_FLOW_ID=your-langflow-flow-id-here
 set LANGFLOW_API_KEY=sk-YOUR_LANGFLOW_API_KEY_HERE
 set IS_AUDIO2FACE=false
+set DB_USER=YOUR_DATABASE_USERNAME
+set DB_PASSWORD=YOUR_DATABASE_PASSWORD
+set DB_URL=jdbc:oracle:thin:@YOUR_DB_SERVICE?TNS_ADMIN=C:\path\to\your\wallet
 
 REM Build and run the application
 mvn clean package

@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html  xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Twin Dashboard F - Factory Operations</title>
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.0/css/bootstrap.min.css"
+          crossorigin="anonymous">
+    <style>
+        body {
+            text-align: center;
+            padding: 20px;
+            background-color: #2A2F2F;
+            color: #F1EFED;
+        }
+        h1, h2, h3, h4, h5, p, label {
+            color: #F1EFED;
+        }
+        .status-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #CC5500;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+            text-align: left;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-online {
+            background-color: #28a745;
+        }
+        .status-offline {
+            background-color: #dc3545;
+        }
+        .status-warning {
+            background-color: #ffc107;
+        }
+        .checkbox-group {
+            margin: 15px 0;
+            text-align: left;
+        }
+        .checkbox-group label {
+            display: block;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+        .checkbox-group input[type="checkbox"] {
+            margin-right: 10px;
+            transform: scale(1.2);
+        }
+        .control-buttons {
+            margin-top: 20px;
+        }
+        .btn-activate {
+            background-color: #dc3545;
+            border-color: #dc3545;
+            color: white;
+            margin: 5px;
+            padding: 10px 20px;
+        }
+        .btn-activate:hover {
+            background-color: #c82333;
+            border-color: #c82333;
+        }
+        .btn-restore {
+            background-color: #28a745;
+            border-color: #28a745;
+            color: white;
+            margin: 5px;
+            padding: 10px 20px;
+        }
+        .btn-restore:hover {
+            background-color: #218838;
+            border-color: #218838;
+        }
+        .section-header {
+            background: #CC5500;
+            color: white;
+            padding: 10px;
+            margin: 20px 0 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .status-readout {
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .bottom-links {
+            display: flex;
+            justify-content: center;
+            margin-top: 30px;
+        }
+        .bottom-links a {
+            margin: 0 10px;
+        }
+        .bottom-links img {
+            width: 200px;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+
+<br><br>
+<h2>Digital Twin Dashboard - Oracle Database Spatial AI Agents</h2>
+<h5>Factory Operations Monitoring & Control Center</h5>
+
+<div class="container mt-4">
+    <div class="row">
+        <!-- Operations Observability/Monitoring Section -->
+        <div class="col-md-6">
+            <div class="section-header">
+                <h4>Operations Observability/Monitoring</h4>
+            </div>
+            <div class="status-panel">
+                <h5>System Status Overview</h5>
+                
+                <div class="status-readout">
+                    <div style="margin-bottom: 10px;">
+                        <strong>CONVEYER BELT STATUS:</strong><br>
+                        <span id="conveyerStatus">
+                            <span class="status-indicator status-online"></span>
+                            OPERATIONAL - Speed: 2.3 m/s | Load: 87% | Temp: 42°C
+                        </span>
+                    </div>
+                    
+                    <div>
+                        <strong>ROUTE STATUS:</strong><br>
+                        <span id="routeStatus">
+                            <span class="status-indicator status-online"></span>
+                            ALL CLEAR - Traffic: Normal | Weather: Clear | ETA: On-time
+                        </span>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 15px;">
+                    <small>Last Updated: <span id="lastUpdated"></span></small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fault Simulation Section -->
+        <div class="col-md-6">
+            <div class="section-header">
+                <h4>Simulate System Faults</h4>
+            </div>
+            <div class="status-panel">
+                <h5>Fault Simulation Controls</h5>
+                
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="conveyerFault" value="conveyer_failure">
+                        <strong>Conveyer Belt Failure</strong><br>
+                        <small>Simulate motor malfunction or belt jam</small>
+                    </label>
+                    
+                    <label>
+                        <input type="checkbox" id="roadDamage" value="road_damage">
+                        <strong>Road Damage (Potholes/Sinkhole)</strong><br>
+                        <small>Simulate route disruption and delivery delays</small>
+                    </label>
+                </div>
+                
+                <!-- Processing Method Options (shown when any fault is selected) -->
+                <div id="processingOptions" style="margin-top: 15px; padding: 15px; border: 2px solid #CC5500; border-radius: 5px; background: rgba(204, 85, 0, 0.1); display: none;">
+                    <div style="margin-bottom: 12px; font-weight: bold; color: #CC5500; font-size: 16px;">🔧 Fault Processing Method:</div>
+                    <label style="margin-bottom: 8px; display: block;">
+                        <input type="radio" name="processingMethod" value="use_langflow" checked>
+                        <strong>Use Langflow</strong>
+                        <small style="display: block; margin-left: 20px; color: #ccc;">AI workflow processing via Langflow API</small>
+                    </label>
+                    <label style="margin-bottom: 8px; display: block;">
+                        <input type="radio" name="processingMethod" value="use_database_ords">
+                        <strong>Use Database Directly via ORDS/Rest</strong>
+                        <small style="display: block; margin-left: 20px; color: #ccc;">Direct Oracle database REST API calls</small>
+                    </label>
+                    <label style="display: block;">
+                        <input type="radio" name="processingMethod" value="use_database_txeventq">
+                        <strong>Use Database Directly via TxEventQ/Kafka</strong>
+                        <small style="display: block; margin-left: 20px; color: #ccc;">Event-driven database processing</small>
+                    </label>
+                </div>
+                
+                <div class="control-buttons">
+                    <button id="activateFaults" class="btn btn-activate">
+                        🚨 Activate Faults
+                    </button>
+                    <button id="restoreSystem" class="btn btn-restore">
+                        ✅ Restore System to Normal
+                    </button>
+                </div>
+                
+                <div id="faultStatus" style="margin-top: 15px; font-style: italic;">
+                    No active faults - System operating normally
+                </div>
+                
+                <!-- API Results Display Area -->
+                <div id="apiResults" style="margin-top: 20px; display: none;">
+                    <h6>Spatial Analysis Results:</h6>
+                    <div id="apiResultsContent" style="background: #000; color: #00ff00; padding: 10px; border-radius: 5px; font-family: 'Courier New', monospace; font-size: 12px; max-height: 200px; overflow-y: auto;">
+                        <!-- API results will be displayed here -->
+                    </div>
+                    <div style="margin-top: 10px; text-align: center;">
+                        <button id="approveRepair" class="btn btn-warning" style="background-color: #ffc107; border-color: #ffc107; color: #212529; padding: 8px 16px;">
+                            🔧 Approve Repair Work Order
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<hr style="border-top: 2px solid #CC5500; margin: 30px 0;">
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    let conveyerFaultActive = false;
+    let roadDamageActive = false;
+    
+    // Show/hide processing options when any fault is selected
+    const conveyerCheckbox = document.getElementById("conveyerFault");
+    const roadDamageCheckbox = document.getElementById("roadDamage");
+    const processingOptions = document.getElementById("processingOptions");
+    
+    function updateProcessingOptionsVisibility() {
+        if (conveyerCheckbox.checked || roadDamageCheckbox.checked) {
+            processingOptions.style.display = "block";
+        } else {
+            processingOptions.style.display = "none";
+        }
+    }
+    
+    conveyerCheckbox.addEventListener("change", updateProcessingOptionsVisibility);
+    roadDamageCheckbox.addEventListener("change", updateProcessingOptionsVisibility);
+    
+    // Update timestamp
+    function updateTimestamp() {
+        const now = new Date();
+        document.getElementById("lastUpdated").textContent = now.toLocaleString();
+    }
+    
+    // Update status displays
+    function updateStatusDisplays() {
+        const conveyerStatusElement = document.getElementById("conveyerStatus");
+        const routeStatusElement = document.getElementById("routeStatus");
+        
+        if (conveyerFaultActive) {
+            conveyerStatusElement.innerHTML = `
+                <span class="status-indicator status-offline"></span>
+                FAULT DETECTED - Motor malfunction | Speed: 0 m/s | Status: STOPPED
+            `;
+        } else {
+            conveyerStatusElement.innerHTML = `
+                <span class="status-indicator status-online"></span>
+                OPERATIONAL - Speed: 2.3 m/s | Load: 87% | Temp: 42°C
+            `;
+        }
+        
+        if (roadDamageActive) {
+            routeStatusElement.innerHTML = `
+                <span class="status-indicator status-offline"></span>
+                ROUTE DISRUPTED - Sinkhole detected | Detour active | ETA: +45 min delay
+            `;
+        } else {
+            routeStatusElement.innerHTML = `
+                <span class="status-indicator status-online"></span>
+                ALL CLEAR - Traffic: Normal | Weather: Clear | ETA: On-time
+            `;
+        }
+        
+        updateTimestamp();
+    }
+    
+    // Update fault status message
+    function updateFaultStatusMessage() {
+        const faultStatusElement = document.getElementById("faultStatus");
+        const activeFaults = [];
+        
+        if (conveyerFaultActive) activeFaults.push("Conveyer Belt Failure");
+        if (roadDamageActive) activeFaults.push("Road Damage");
+        
+        if (activeFaults.length === 0) {
+            // Check if we have a repair timestamp to display
+            const lastRepaired = localStorage.getItem('lastRepaired');
+            if (lastRepaired) {
+                faultStatusElement.innerHTML = `No active faults - System operating normally<br><small>Last repaired: ${lastRepaired}</small>`;
+            } else {
+                faultStatusElement.textContent = "No active faults - System operating normally";
+            }
+            faultStatusElement.style.color = "#28a745";
+        } else {
+            faultStatusElement.textContent = `Active faults: ${activeFaults.join(", ")} - Repair work order required`;
+            faultStatusElement.style.color = "#dc3545";
+        }
+    }
+    
+    // Activate faults button
+    document.getElementById("activateFaults").addEventListener("click", async function() {
+        const conveyerCheckbox = document.getElementById("conveyerFault");
+        const roadCheckbox = document.getElementById("roadDamage");
+        
+        if (!conveyerCheckbox.checked && !roadCheckbox.checked) {
+            alert("⚠️ Please select at least one fault to activate.");
+            return;
+        }
+        
+        // Show loading state
+        this.disabled = true;
+        this.innerHTML = "🔄 Activating Faults...";
+        
+        try {
+            let apiResponse = null;
+            
+            // Check which processing method is selected (applies to both fault types)
+            const selectedMethod = document.querySelector('input[name="processingMethod"]:checked').value;
+            
+            if (selectedMethod === "use_langflow") {
+                    // Call Langflow API
+                    const langflowUrl = "http://141.148.204.74:7860/api/v1/run/46f1f91f-5d2f-4fca-a558-fc0dffcd73b4";
+                    
+                    console.log("Calling Langflow API:", langflowUrl);
+                    const response = await fetch(langflowUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': 'sk-EbE5Pkponr-c8NLZ9hStLG0LmqwM76wvvfIeANaYpI4'
+                        },
+                        body: JSON.stringify({
+                            "output_type": "chat",
+                            "input_type": "chat",
+                            "input_value": `Fault detected - ${conveyerCheckbox.checked ? 'Conveyer belt failure' : ''} ${roadCheckbox.checked ? 'Road damage' : ''} - analyzing suppliers within 50km of Philadelphia Facility for emergency repairs`
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        apiResponse = await response.json();
+                        console.log("Langflow API Response:", apiResponse);
+                    } else {
+                        console.error("Langflow API Error:", response.status, response.statusText);
+                        const errorText = await response.text();
+                        console.error("Error details:", errorText);
+                        throw new Error(`Langflow API failed: ${response.status} ${response.statusText}`);
+                    }
+            } else {
+                // Use the original Oracle Cloud API for database methods
+                const apiUrl = "https://rddainsuh6u1okc-dlapp1.adb.us-ashburn-1.oraclecloudapps.com/ords/sandbox/aiw25/spatial/which%20suppliers%20within%2050%20km%20from%20the%20%22Philadelphia%20Facility%22";
+                
+                console.log(`Calling Oracle Database API (${selectedMethod}):`, apiUrl);
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    apiResponse = await response.json();
+                    console.log("Oracle API Response:", apiResponse);
+                } else {
+                    console.error("Oracle API Error:", response.status, response.statusText);
+                    const errorText = await response.text();
+                    console.error("Error details:", errorText);
+                    throw new Error(`Oracle API failed: ${response.status} ${response.statusText}`);
+                }
+            }
+            
+            // Display API results
+            const resultsDiv = document.getElementById("apiResults");
+            const resultsContent = document.getElementById("apiResultsContent");
+            
+            resultsDiv.style.display = "block";
+            resultsContent.innerHTML = `<pre>${JSON.stringify(apiResponse, null, 2)}</pre>`;
+            
+            // Activate the selected faults
+            if (conveyerCheckbox.checked) {
+                conveyerFaultActive = true;
+            }
+            
+            if (roadCheckbox.checked) {
+                roadDamageActive = true;
+            }
+            
+            updateStatusDisplays();
+            updateFaultStatusMessage();
+            
+            // Uncheck the boxes after activation
+            conveyerCheckbox.checked = false;
+            roadCheckbox.checked = false;
+            
+            // Hide processing options when both are unchecked
+            updateProcessingOptionsVisibility();
+            
+            alert("🚨 Selected faults have been activated! Analysis complete.");
+            
+        } catch (error) {
+            console.error("API Error:", error);
+            
+            // Still activate faults even if API fails
+            if (conveyerCheckbox.checked) {
+                conveyerFaultActive = true;
+            }
+            
+            if (roadCheckbox.checked) {
+                roadDamageActive = true;
+            }
+            
+            updateStatusDisplays();
+            updateFaultStatusMessage();
+            
+            conveyerCheckbox.checked = false;
+            roadCheckbox.checked = false;
+            
+            // Hide processing options when both are unchecked
+            updateProcessingOptionsVisibility();
+            
+            alert(`❌ Faults activated, but API error occurred: ${error.message}`);
+        } finally {
+            // Restore button state
+            this.disabled = false;
+            this.innerHTML = "🚨 Activate Faults";
+        }
+    });
+    
+    // Restore system button
+    document.getElementById("restoreSystem").addEventListener("click", function() {
+        conveyerFaultActive = false;
+        roadDamageActive = false;
+        
+        updateStatusDisplays();
+        updateFaultStatusMessage();
+        
+        // Hide API results when restoring system
+        document.getElementById("apiResults").style.display = "none";
+        
+        // Uncheck any selected boxes
+        document.getElementById("conveyerFault").checked = false;
+        document.getElementById("roadDamage").checked = false;
+        
+        alert("✅ All systems have been restored to normal operation!");
+    });
+    
+    // Approve repair work order button
+    document.getElementById("approveRepair").addEventListener("click", function() {
+        // Clear all active faults
+        conveyerFaultActive = false;
+        roadDamageActive = false;
+        
+        // Store repair timestamp
+        const now = new Date();
+        const repairTime = now.toLocaleString();
+        localStorage.setItem('lastRepaired', repairTime);
+        
+        // Update displays
+        updateStatusDisplays();
+        updateFaultStatusMessage();
+        
+        // Hide API results
+        document.getElementById("apiResults").style.display = "none";
+        
+        // Show success message
+        alert("🔧 Repair work order approved! All systems restored to normal operation.");
+    });
+    
+    // Initialize display
+    updateStatusDisplays();
+    updateFaultStatusMessage();
+    
+    // Update timestamp every 30 seconds
+    setInterval(updateTimestamp, 30000);
+});
+</script>
+
+<div class="bottom-links">
+    <a href="aiholo" target="_blank">
+        <img src="../images-aiholo/Icons/AI.svg" alt="AI Hologram" style="width: 100px; height: auto;">
+    </a>
+</div>
+
+<hr style="border-top: 2px solid #CC5500; margin: 20px 0;">
+
+<div class="footer" style="margin-top: 30px;">
+    <p><small>Digital Twin Factory Operations Dashboard | Real-time Monitoring & Fault Simulation</small></p>
+</div>
+
+<hr style="border-top: 2px solid #CC5500; margin: 20px 0;">
+
+<!-- Left to do section -->
+<div class="section-header" style="margin-top: 30px;">
+    <h4>📋 Left to Do</h4>
+</div>
+<div class="status-panel" style="margin-bottom: 30px;">
+    <ul style="text-align: left; color: #F1EFED; padding-left: 20px;">
+        <li style="margin-bottom: 8px;">Have the damage shown in the OV or Unreal app</li>
+        <li style="margin-bottom: 8px;">Have the repair shown in the OV or Unreal app</li>
+        <li style="margin-bottom: 8px;">Call the larger maintenance flow and not just the route finder ORDS call</li>
+        <li style="margin-bottom: 8px;">Include in the larger maintenance flow the vector search for maintenance procedure</li>
+        <li style="margin-bottom: 8px;">Include in the maintenance flow an MCP call to get inventory levels of part</li>
+        <li style="margin-bottom: 8px;">Return the human in the loop approval req with various map, inventory, and other relevant data</li>
+    </ul>
+</div>
+
+</body>
+</html>

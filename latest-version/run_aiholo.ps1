@@ -8,5 +8,6 @@ $env:AUDIO_DIR_PATH = "C:/src/github.com/paulparkinson/interactive-ai-holograms/
 $env:LANGFLOW_SERVER_URL = "http://141.148.204.74:7860/api"
 $env:LANGFLOW_FLOW_ID = "6609ea03-9b37-4f28-9fdf-18cb8fdc504f"
 $env:LANGFLOW_API_KEY = "sk-EbE5Pkponr-c8NLZ9hStLG0LmqwM76wvvfIeANaYpI4"
+$env:IS_AUDIO2FACE = "false"
 mvn clean package
 java -jar .\target\oracleai-0.0.1-SNAPSHOT.jar

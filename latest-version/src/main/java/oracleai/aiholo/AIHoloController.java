@@ -69,6 +69,7 @@ public class AIHoloController {
     private static final String LANGFLOW_FLOW_ID = System.getenv("LANGFLOW_FLOW_ID");
     private static final String LANGFLOW_API_KEY = System.getenv("LANGFLOW_API_KEY");
     static final String AUDIO_DIR_PATH = System.getenv("AUDIO_DIR_PATH");
+    private static final boolean IS_AUDIO2FACE = Boolean.parseBoolean(System.getenv("IS_AUDIO2FACE"));
     private static int currentAnswerIntro = 0;
     private static String aiholo_prompt_additions = "";
 
@@ -119,7 +120,11 @@ public class AIHoloController {
 //            TTSAndAudio2Face.processMetahuman(
 //                        fileName,  TimeInWords.getTimeInWords(languageCode),
 //                    DEFAULT_LANGUAGE_CODE, DEFAULT_VOICE_NAME);
-            TTSAndAudio2Face.sendToAudio2Face("explainer.wav");
+            if (IS_AUDIO2FACE) {
+                TTSAndAudio2Face.sendToAudio2Face("explainer.wav");
+            } else {
+                TTSAndAudio2Face.playAudioFile("explainer.wav");
+            }
         }, 1, 15, TimeUnit.MINUTES);
     }
 
@@ -127,7 +132,7 @@ public class AIHoloController {
     @GetMapping("")
     public String home(@RequestParam(value = "languageCode", defaultValue = "en-US") String languageCode, Model model) {
         System.out.println("AIHolo root languageCode = " + languageCode);
-        this.languageCode = languageCode;
+        AIHoloController.languageCode = languageCode;
         model.addAttribute("languageCode", languageCode);
         if (languageCode.equals("pt-BR"))
             model.addAttribute("voiceName", "pt-BR-Wavenet-D");
@@ -182,69 +187,16 @@ public class AIHoloController {
         } catch (IOException e) {
             return "Error writing to file: " + e.getMessage();
         }
-        // TTSAndAudio2Face.sendToAudio2Face("explainer.wav");
-        playAudioFile("explainer.wav");
+        if (IS_AUDIO2FACE) {
+            TTSAndAudio2Face.sendToAudio2Face("explainer.wav");
+        } else {
+            TTSAndAudio2Face.playAudioFile("explainer.wav");
+        }
 
         return "Explained";
     }
 
-    static void playAudioFile(String filename) {
-        // Play audio asynchronously to avoid blocking the calling thread
-        new Thread(() -> {
-            try {
-                if (AUDIO_DIR_PATH == null) {
-                    System.err.println("AUDIO_DIR_PATH environment variable is not set");
-                    return;
-                }
-                
-                // Use Paths.get() for proper cross-platform path handling
-                java.nio.file.Path audioPath = Paths.get(AUDIO_DIR_PATH, filename);
-                String fullPath = audioPath.toString();
-                File audioFile = audioPath.toFile();
-                
-                System.out.println("Attempting to play: " + fullPath);
-                System.out.println("File exists: " + audioFile.exists());
-                System.out.println("File size: " + audioFile.length() + " bytes");
-                
-                if (!audioFile.exists()) {
-                    System.err.println("Audio file not found: " + fullPath);
-                    return;
-                }
-                
-                System.out.println("Playing audio file on local machine: " + fullPath);
-                
-                // Use AudioSystem to play the WAV file on the local machine
-                AudioInputStream audioStream = AudioSystem.getAudioInputStream(audioFile);
-                AudioFormat format = audioStream.getFormat();
-                System.out.println("Audio format: " + format);
-                
-                Clip clip = AudioSystem.getClip();
-                clip.open(audioStream);
-                
-                // Set volume to maximum (if supported)
-                if (clip.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
-                    FloatControl gainControl = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
-                    gainControl.setValue(gainControl.getMaximum());
-                    System.out.println("Set volume to maximum: " + gainControl.getValue());
-                }
-                
-                clip.start();
-                System.out.println("Audio playback started, duration: " + (clip.getMicrosecondLength() / 1000000.0) + " seconds");
-                
-                // Wait for the audio to finish playing
-                Thread.sleep(clip.getMicrosecondLength() / 1000);
-                
-                clip.close();
-                audioStream.close();
-                
-                System.out.println("Finished playing audio file: " + filename);
-                
-            } catch (Exception e) {
-                System.err.println("Error playing audio file: " + e.getMessage());
-                e.printStackTrace();
-            }
-        }).start();
-    }
+
 
     @GetMapping("/leia")
     @ResponseBody
@@ -291,24 +243,48 @@ public class AIHoloController {
             try {
                 // languagecode:es-MX voicename:es-US-Wavenet-A
                 if (languageCode.equals("es-MX")) {
-                    TTSAndAudio2Face.sendToAudio2Face("tts-es-USFEMALEes-US-Wavenet-A_¡Claro!¡U.wav");
+                    if (IS_AUDIO2FACE) {
+                        TTSAndAudio2Face.sendToAudio2Face("tts-es-USFEMALEes-US-Wavenet-A_¡Claro!¡U.wav");
+                    } else {
+                        TTSAndAudio2Face.playAudioFile("tts-es-USFEMALEes-US-Wavenet-A_¡Claro!¡U.wav");
+                    }
                 } else {
                     // Switch for currentAnswerIntro
                     switch (currentAnswerIntro) {
                         case 0:
-                            TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_Sure!Illcheck.wav");
+                            if (IS_AUDIO2FACE) {
+                                TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_Sure!Illcheck.wav");
+                            } else {
+                                TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_Sure!Illcheck.wav");
+                            }
                             break;
                         case 1:
-                            TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_on_it.wav");
+                            if (IS_AUDIO2FACE) {
+                                TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_on_it.wav");
+                            } else {
+                                TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_on_it.wav");
+                            }
                             break;
                         case 2:
-                            TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_one_sec.wav");
+                            if (IS_AUDIO2FACE) {
+                                TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_one_sec.wav");
+                            } else {
+                                TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_one_sec.wav");
+                            }
                             break;
                         case 3:
-                            TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_hmm.wav");
+                            if (IS_AUDIO2FACE) {
+                                TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_hmm.wav");
+                            } else {
+                                TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_hmm.wav");
+                            }
                             break;
                         default:
-                            TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_Sure!Illcheck.wav");
+                            if (IS_AUDIO2FACE) {
+                                TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_Sure!Illcheck.wav");
+                            } else {
+                                TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_Sure!Illcheck.wav");
+                            }
                     }
                     currentAnswerIntro++;
                     if (currentAnswerIntro > 3) currentAnswerIntro = 0;

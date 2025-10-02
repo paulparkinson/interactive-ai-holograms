@@ -14,6 +14,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.io.File;
+import javax.sound.sampled.*;
+import java.nio.file.Paths;
 
 public class TTSAndAudio2Face {
     private static final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -22,7 +25,13 @@ public class TTSAndAudio2Face {
         executor.submit(() -> {
             try {
                 TTS(fileName, textToSay, languageCode, voiceName);
-                sendToAudio2Face(fileName);
+                // Get the IS_AUDIO2FACE setting from AIHoloController
+                boolean isAudio2Face = Boolean.parseBoolean(System.getenv("IS_AUDIO2FACE"));
+                if (isAudio2Face) {
+                    sendToAudio2Face(fileName);
+                } else {
+                    playAudioFile(fileName);
+                }
             } catch (Exception e) {
                 System.out.println("processMetahuman exception during TTS:" + e);
                 //com.google.api.gax.rpc.UnavailableException: io.grpc.StatusRuntimeException:
@@ -30,7 +39,12 @@ public class TTSAndAudio2Face {
                 // will occur if token expired
                 //TODO might be funny and helpful to do this, ie have the system gives its status and ask for help ...
                 // sendToAudio2Face("uhoh-lookslikeIneedanewTTStoken.wav");
-                sendToAudio2Face(AIHoloController.AUDIO_DIR_PATH + "tts-en-USFEMALEAoede_SorrySpeechToken.wav");
+                boolean isAudio2Face = Boolean.parseBoolean(System.getenv("IS_AUDIO2FACE"));
+                if (isAudio2Face) {
+                    sendToAudio2Face(AIHoloController.AUDIO_DIR_PATH + "tts-en-USFEMALEAoede_SorrySpeechToken.wav");
+                } else {
+                    playAudioFile("tts-en-USFEMALEAoede_SorrySpeechToken.wav");
+                }
 //                sendToAudio2Face("hello-brazil.wav");
             }
 
@@ -104,6 +118,64 @@ public class TTSAndAudio2Face {
         } else {
             System.err.println("Failed to send request to " + url + ". Response: " + response.getBody());
         }
+    }
+
+    public static void playAudioFile(String filename) {
+        // Play audio asynchronously to avoid blocking the calling thread
+        new Thread(() -> {
+            try {
+                if (AIHoloController.AUDIO_DIR_PATH == null) {
+                    System.err.println("AUDIO_DIR_PATH environment variable is not set");
+                    return;
+                }
+                
+                // Use Paths.get() for proper cross-platform path handling
+                java.nio.file.Path audioPath = Paths.get(AIHoloController.AUDIO_DIR_PATH, filename);
+                String fullPath = audioPath.toString();
+                File audioFile = audioPath.toFile();
+                
+                System.out.println("Attempting to play: " + fullPath);
+                System.out.println("File exists: " + audioFile.exists());
+                System.out.println("File size: " + audioFile.length() + " bytes");
+                
+                if (!audioFile.exists()) {
+                    System.err.println("Audio file not found: " + fullPath);
+                    return;
+                }
+                
+                System.out.println("Playing audio file on local machine: " + fullPath);
+                
+                // Use AudioSystem to play the WAV file on the local machine
+                AudioInputStream audioStream = AudioSystem.getAudioInputStream(audioFile);
+                AudioFormat format = audioStream.getFormat();
+                System.out.println("Audio format: " + format);
+                
+                Clip clip = AudioSystem.getClip();
+                clip.open(audioStream);
+                
+                // Set volume to maximum (if supported)
+                if (clip.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
+                    FloatControl gainControl = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
+                    gainControl.setValue(gainControl.getMaximum());
+                    System.out.println("Set volume to maximum: " + gainControl.getValue());
+                }
+                
+                clip.start();
+                System.out.println("Audio playback started, duration: " + (clip.getMicrosecondLength() / 1000000.0) + " seconds");
+                
+                // Wait for the audio to finish playing
+                Thread.sleep(clip.getMicrosecondLength() / 1000);
+                
+                clip.close();
+                audioStream.close();
+                
+                System.out.println("Finished playing audio file: " + filename);
+                
+            } catch (Exception e) {
+                System.err.println("Error playing audio file: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }).start();
     }
 
 

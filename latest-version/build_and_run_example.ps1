@@ -1,9 +1,7 @@
 # Set the environment variables - EXAMPLE FILE
 # Copy this file to run_aiholo.ps1 and replace with your actual values
 
-$env:SANDBOX_API_URL0 = "http://YOUR_SANDBOX_SERVER:8000/v1/chat/completions"
 $env:SANDBOX_API_URL = "http://YOUR_SANDBOX_SERVER/v1/chat/completions?client=server"
-$env:SANDBOX_AUTH_TOKEN0 = "Bearer YOUR_SANDBOX_AUTH_TOKEN_HERE"
 $env:AI_OPTIMZER = "Bearer YOUR_AI_OPTIMIZER_TOKEN_HERE"
 $env:AIHOLO_HOST_URL = "http://localhost:8080"
 $env:AUDIO_DIR_PATH = "C:/path/to/your/project/src/main/resources/static/audio-aiholo/"

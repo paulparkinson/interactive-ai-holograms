@@ -14,6 +14,11 @@ set DB_USER=YOUR_DATABASE_USERNAME
 set DB_PASSWORD=YOUR_DATABASE_PASSWORD
 set DB_URL=jdbc:oracle:thin:@YOUR_DB_SERVICE?TNS_ADMIN=C:\path\to\your\wallet
 set OUTPUT_FILE_PATH=C:\path\to\your\aiholo_output.txt
+set SERVER_PORT=8080
+set SSL_ENABLED=false
+set SSL_KEY_STORE=classpath:your-keystore.p12
+set SSL_KEY_STORE_PASSWORD=YOUR_KEYSTORE_PASSWORD
+set SSL_KEY_ALIAS=your-key-alias
 
 REM Build and run the application
 mvn clean package

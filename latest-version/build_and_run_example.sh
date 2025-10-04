@@ -14,6 +14,11 @@ export DB_USER="YOUR_DATABASE_USERNAME"
 export DB_PASSWORD="YOUR_DATABASE_PASSWORD"
 export DB_URL="jdbc:oracle:thin:@YOUR_DB_SERVICE?TNS_ADMIN=/path/to/your/wallet"
 export OUTPUT_FILE_PATH="/path/to/your/aiholo_output.txt"
+export SERVER_PORT="8080"
+export SSL_ENABLED="false"
+export SSL_KEY_STORE="classpath:your-keystore.p12"
+export SSL_KEY_STORE_PASSWORD="YOUR_KEYSTORE_PASSWORD"
+export SSL_KEY_ALIAS="your-key-alias"
 
 # Build and run the application
 mvn clean package

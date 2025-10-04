@@ -13,6 +13,11 @@ $env:DB_USER = "YOUR_DATABASE_USERNAME"
 $env:DB_PASSWORD = "YOUR_DATABASE_PASSWORD"
 $env:DB_URL = "jdbc:oracle:thin:@YOUR_DB_SERVICE?TNS_ADMIN=C:/path/to/your/wallet"
 $env:OUTPUT_FILE_PATH = "C:/path/to/your/aiholo_output.txt"
+$env:SERVER_PORT = "8080"
+$env:SSL_ENABLED = "false"
+$env:SSL_KEY_STORE = "classpath:your-keystore.p12"
+$env:SSL_KEY_STORE_PASSWORD = "YOUR_KEYSTORE_PASSWORD"
+$env:SSL_KEY_ALIAS = "your-key-alias"
 
 # Build and run the application
 mvn clean package

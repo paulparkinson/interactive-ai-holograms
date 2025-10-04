@@ -12,6 +12,7 @@ $env:IS_AUDIO2FACE = "false"
 $env:DB_USER = "YOUR_DATABASE_USERNAME"
 $env:DB_PASSWORD = "YOUR_DATABASE_PASSWORD"
 $env:DB_URL = "jdbc:oracle:thin:@YOUR_DB_SERVICE?TNS_ADMIN=C:/path/to/your/wallet"
+$env:OUTPUT_FILE_PATH = "C:/path/to/your/aiholo_output.txt"
 
 # Build and run the application
 mvn clean package

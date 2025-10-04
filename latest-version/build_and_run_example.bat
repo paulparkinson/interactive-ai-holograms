@@ -13,6 +13,7 @@ set IS_AUDIO2FACE=false
 set DB_USER=YOUR_DATABASE_USERNAME
 set DB_PASSWORD=YOUR_DATABASE_PASSWORD
 set DB_URL=jdbc:oracle:thin:@YOUR_DB_SERVICE?TNS_ADMIN=C:\path\to\your\wallet
+set OUTPUT_FILE_PATH=C:\path\to\your\aiholo_output.txt
 
 REM Build and run the application
 mvn clean package

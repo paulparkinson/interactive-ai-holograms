@@ -66,6 +66,10 @@
             height: auto;
         }
     </style>
+    <script>
+        // Dynamic host URL configuration
+        const AIHOLO_HOST_URL = window.location.origin || 'http://localhost:8080';
+    </script>
 </head>
 <body>
 
@@ -213,7 +217,7 @@
             }
             const selectedMode = document.querySelector('input[name="mode"]:checked').value;
             const modifiedText = `${transcriptionText} .`;
-            const apiUrl = `https://aiholo.org/aiholo/play?question=${encodeURIComponent(modifiedText)}&selectedMode=${encodeURIComponent(selectedMode)}&languageCode=${encodeURIComponent(languageCodeSTT)}&voiceName=${encodeURIComponent(voiceName)}`;
+            const apiUrl = `${AIHOLO_HOST_URL}/aiholo/play?question=${encodeURIComponent(modifiedText)}&selectedMode=${encodeURIComponent(selectedMode)}&languageCode=${encodeURIComponent(languageCodeSTT)}&voiceName=${encodeURIComponent(voiceName)}`;
 
             try {
                 const response = await fetch(apiUrl, { method: "GET" });
@@ -227,7 +231,7 @@
 
         document.getElementById("mirrorMeBtn").addEventListener("click", async () => {
             try {
-                const response = await fetch("https://aiholo.org/aiholo/set?value=mirrorme", {
+                const response = await fetch(`${AIHOLO_HOST_URL}/aiholo/set?value=mirrorme`, {
                     method: "GET",
                 });
             if (!response.ok) {
@@ -242,7 +246,7 @@
 
         document.getElementById("explainerBtn").addEventListener("click", async () => {
             try {
-                const response = await fetch("https://aiholo.org/aiholo/explainer", {
+                const response = await fetch(`${AIHOLO_HOST_URL}/aiholo/explainer`, {
                     method: "GET",
                 });
             if (!response.ok) {
@@ -290,7 +294,7 @@
 <script>
     function submitQuery() {
         var inputVal = document.getElementById('speechInput').value;
-        var url = 'https://aiholo.org/aiholo/saything?whattosay=' + encodeURIComponent(inputVal);
+        var url = `${AIHOLO_HOST_URL}/aiholo/saything?whattosay=` + encodeURIComponent(inputVal);
         window.open(url, '_blank');
     }
 </script>

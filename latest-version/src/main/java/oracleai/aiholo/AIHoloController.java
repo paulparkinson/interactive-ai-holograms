@@ -69,6 +69,8 @@ public class AIHoloController {
     private static final String LANGFLOW_FLOW_ID = System.getenv("LANGFLOW_FLOW_ID");
     private static final String LANGFLOW_API_KEY = System.getenv("LANGFLOW_API_KEY");
     static final String AUDIO_DIR_PATH = System.getenv("AUDIO_DIR_PATH");
+    private static final String OUTPUT_FILE_PATH = System.getenv("OUTPUT_FILE_PATH");
+    private static final String AIHOLO_HOST_URL = System.getenv("AIHOLO_HOST_URL");
     private static final boolean IS_AUDIO2FACE = Boolean.parseBoolean(System.getenv("IS_AUDIO2FACE"));
     private static int currentAnswerIntro = 0;
     private static String aiholo_prompt_additions = "";
@@ -134,6 +136,7 @@ public class AIHoloController {
         System.out.println("AIHolo root languageCode = " + languageCode);
         AIHoloController.languageCode = languageCode;
         model.addAttribute("languageCode", languageCode);
+        model.addAttribute("aiholoHostUrl", AIHOLO_HOST_URL != null ? AIHOLO_HOST_URL : "http://localhost:8080");
         if (languageCode.equals("pt-BR"))
             model.addAttribute("voiceName", "pt-BR-Wavenet-D");
         else if (languageCode.equals("es-ES"))
@@ -178,7 +181,7 @@ public class AIHoloController {
     public String explainer() throws Exception {
         System.out.println("AIHoloController.explainer");
         theValue = "explainer";
-        String filePath = "C:/Users/paulp/aiholo_output.txt";
+        String filePath = OUTPUT_FILE_PATH != null ? OUTPUT_FILE_PATH : "aiholo_output.txt";
         try (FileWriter writer = new FileWriter(filePath)) {
             JSONObject json = new JSONObject();
             json.put("data", theValue);
@@ -203,7 +206,7 @@ public class AIHoloController {
     public String leia() throws Exception {
         System.out.println("AIHoloController.leia");
         theValue = "leia";
-        String filePath = "C:/Users/paulp/aiholo_output.txt";
+        String filePath = OUTPUT_FILE_PATH != null ? OUTPUT_FILE_PATH : "aiholo_output.txt";
         try (FileWriter writer = new FileWriter(filePath)) {
             JSONObject json = new JSONObject();
             json.put("data", theValue);
@@ -228,7 +231,7 @@ public class AIHoloController {
                         " languageCode:" + languageCode + " voicename:" + voicename);
         System.out.println("modified question: " + question);
         theValue = "question";
-        String filePath = "C:/Users/paulp/aiholo_output.txt";
+        String filePath = OUTPUT_FILE_PATH != null ? OUTPUT_FILE_PATH : "aiholo_output.txt";
         try (FileWriter writer = new FileWriter(filePath)) {
             JSONObject json = new JSONObject();
             json.put("data", theValue); // Store the response inside JSON
@@ -634,7 +637,7 @@ public class AIHoloController {
     public String setValue(@RequestParam("value") String value) {
         theValue = value;
         System.out.println("EchoController set: " + theValue);
-        String filePath = "C:/Users/paulp/aiholo_output.txt";
+        String filePath = OUTPUT_FILE_PATH != null ? OUTPUT_FILE_PATH : "aiholo_output.txt";
         try (FileWriter writer = new FileWriter(filePath)) {
             JSONObject json = new JSONObject();
             json.put("data", value); // Store the response inside JSON
@@ -664,7 +667,7 @@ public class AIHoloController {
         System.out.println("playarbitrary answer = " + answer + ", languageCode = " + languageCode + ", voicename = " + voicename);
         try {
             theValue = "question";
-            String filePath = "C:/Users/paulp/aiholo_output.txt";
+            String filePath = OUTPUT_FILE_PATH != null ? OUTPUT_FILE_PATH : "aiholo_output.txt";
             try (FileWriter writer = new FileWriter(filePath)) {
                 JSONObject json = new JSONObject();
                 json.put("data", theValue); // Store the response inside JSON

@@ -13,6 +13,7 @@ export IS_AUDIO2FACE="false"
 export DB_USER="YOUR_DATABASE_USERNAME"
 export DB_PASSWORD="YOUR_DATABASE_PASSWORD"
 export DB_URL="jdbc:oracle:thin:@YOUR_DB_SERVICE?TNS_ADMIN=/path/to/your/wallet"
+export OUTPUT_FILE_PATH="/path/to/your/aiholo_output.txt"
 
 # Build and run the application
 mvn clean package

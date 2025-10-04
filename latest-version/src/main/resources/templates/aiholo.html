@@ -244,7 +244,7 @@
             // Check for "mirror me" command
             if (transcriptionText.toLowerCase() === "mirror me") {
                 try {
-                    const response = await fetch("http://localhost:8080/aiholo/set?value=mirrorme", { method: "GET" });
+                    const response = await fetch("[[${aiholoHostUrl}]]/aiholo/set?value=mirrorme", { method: "GET" });
                     if (response.ok) {
                         document.getElementById("responseMessage").innerText = "✅ Switched to 'Mirror Me' mode successfully!";
                     } else {
@@ -278,7 +278,7 @@
 
             const selectedMode = document.querySelector('input[name="mode"]:checked').value;
             const modifiedText = `${conversationalContext}\nQ: ${transcriptionText}`;
-            const apiUrl = `http://localhost:8080/aiholo/play?question=${encodeURIComponent(modifiedText)}&selectedMode=${encodeURIComponent(selectedMode)}&languageCode=${encodeURIComponent(languageCodeSTT)}&voiceName=${encodeURIComponent(voiceName)}`;
+            const apiUrl = `[[${aiholoHostUrl}]]/aiholo/play?question=${encodeURIComponent(modifiedText)}&selectedMode=${encodeURIComponent(selectedMode)}&languageCode=${encodeURIComponent(languageCodeSTT)}&voiceName=${encodeURIComponent(voiceName)}`;
 
             try {
                 const response = await fetch(apiUrl, { method: "GET" });
@@ -305,7 +305,7 @@
 
         document.getElementById("mirrorMeBtn").addEventListener("click", async () => {
             try {
-                const response = await fetch("http://localhost:8080/aiholo/set?value=mirrorme", { method: "GET" });
+                const response = await fetch("[[${aiholoHostUrl}]]/aiholo/set?value=mirrorme", { method: "GET" });
                 if (response.ok) {
                     alert("✅ Switched to 'Mirror Me' mode successfully!");
                 } else {
@@ -319,7 +319,7 @@
 
         document.getElementById("explainerBtn").addEventListener("click", async () => {
             try {
-                const response = await fetch("http://localhost:8080/aiholo/explainer", { method: "GET" });
+                const response = await fetch("[[${aiholoHostUrl}]]/aiholo/explainer", { method: "GET" });
                 if (response.ok) {
                     alert("✅ Explainer mode activated successfully!");
                 } else {
@@ -427,7 +427,7 @@
 <hr style="border-top: 2px solid #CC5500; margin: 20px 0;">
 <br>
 <div class="footer">
-    <form id="footerSayForm" class="input-group" action="http://localhost:8080/aiholo/playarbitrary" method="GET">
+    <form id="footerSayForm" class="input-group" action="[[${aiholoHostUrl}]]/aiholo/playarbitrary" method="GET">
         <input type="text" id="speechInput" name="answer" class="form-control" placeholder="Type something to say directly..." required>
         <input type="hidden" id="footerLanguageCode" name="languageCode" value="" />
         <input type="hidden" id="footerVoiceName" name="voiceName" value="" />
@@ -451,7 +451,7 @@
             const languageCode = document.getElementById("footerLanguageCode").value;
             const voiceName = document.getElementById("footerVoiceName").value;
             const fileName = "footer.wav";
-            const url = `http://localhost:8080/aiholo/playarbitrary?fileName=${encodeURIComponent(fileName)}&answer=${encodeURIComponent(answer)}&languageCode=${encodeURIComponent(languageCode)}&voiceName=${encodeURIComponent(voiceName)}`;
+            const url = `[[${aiholoHostUrl}]]/aiholo/playarbitrary?fileName=${encodeURIComponent(fileName)}&answer=${encodeURIComponent(answer)}&languageCode=${encodeURIComponent(languageCode)}&voiceName=${encodeURIComponent(voiceName)}`;
             window.open(url, "aiholoFooterSay", "width=600,height=400");
         });
     });

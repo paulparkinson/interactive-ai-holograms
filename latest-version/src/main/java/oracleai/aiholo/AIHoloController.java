@@ -658,6 +658,24 @@ public class AIHoloController {
         return theValue;
     }
 
+    // Simple static string storage without file operations
+    private static String simpleValue = "default";
+
+    @GetMapping("/simple/set")
+    @ResponseBody
+    public String setSimpleValue(@RequestParam("value") String value) {
+        simpleValue = value;
+        System.out.println("Simple set: " + simpleValue);
+        return "Simple value set successfully: " + simpleValue;
+    }
+
+    @GetMapping("/simple/get")
+    @ResponseBody
+    public String getSimpleValue() {
+        System.out.println("Simple get: " + simpleValue);
+        return simpleValue;
+    }
+
     @GetMapping("/playarbitrary")
     @ResponseBody
     public String playArbitrary(

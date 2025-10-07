@@ -2,6 +2,7 @@ package oracleai.aiholo;
 
 import java.io.FileWriter;
 import java.io.IOException;
+import java.net.URI;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -39,10 +40,11 @@ import java.util.Locale;
 import java.util.Map;
 
 import org.springframework.http.*;
+import org.springframework.web.util.UriComponentsBuilder;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.nio.charset.StandardCharsets;
 
 @Controller
 @RequestMapping("/aiholo")
@@ -330,6 +332,12 @@ public class AIHoloController {
         } catch (IOException e) {
             return "Error writing to file: " + e.getMessage();
         }
+            String normalized = question.toLowerCase();
+            boolean videoAgentIntent = normalized.contains("video") && normalized.contains("agent");
+            if (videoAgentIntent) {
+                triggerVideoAgent("leia");
+                return "Triggered video agent";
+            }   
 
         // Start a new thread to call TTSAndAudio2Face.sendToAudio2Face with intro switching
         new Thread(() -> {
@@ -403,7 +411,6 @@ public class AIHoloController {
             // If the user asks about a financial agent, call the Langflow financial agent
             // instead of the generic sandbox. The comparison is case-insensitive to
             // capture variations like "Financial Agent" or "financial agent".
-            String normalized = question.toLowerCase();
 // Check if the string contains "financ" and "agent"
             boolean financialAgentIntent = normalized.contains("financ") && normalized.contains("agent");
             long aiStartNs = System.nanoTime();
@@ -824,6 +831,40 @@ public class AIHoloController {
         }
     }
     
+    private static void triggerVideoAgent(String providedValue) {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBasicAuth("oracleai", "oraclespatialai");
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            String baseUrl = "http://150.136.102.87:8080/status/aiholo/set";
+            URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                    .queryParam("type", "video")
+                    .queryParam("value", providedValue)
+                    .build(true)
+                    .toUri();
+            ResponseEntity<String> response = restTemplate.exchange(uri, HttpMethod.GET, entity, String.class);
+            System.out.println("Video agent status=" + response.getStatusCode());
+            if (response.getBody() != null && !response.getBody().isBlank()) {
+                System.out.println("Video agent response body: " + response.getBody());
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to notify video agent: " + e.getMessage());
+        }
+
+        new Thread(() -> {
+            try {
+                if (IS_AUDIO2FACE) {
+                    TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_playingvideo.wav");
+                } else {
+                    TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_playingvideo.wav");
+                }
+            } catch (Exception audioError) {
+                System.err.println("Failed to play video agent audio: " + audioError.getMessage());
+            }
+        }).start();
+    }
+
     private void generateAndPlayTts(String fileName, String textToSay, String languageCode, String voiceName,
                                     String aiPipelineLabel, double aiDurationMillis, TTSSelection requestedMode) throws Exception {
         String safeText = (textToSay == null || textToSay.isBlank()) ? " " : textToSay;

@@ -160,7 +160,11 @@ public class TTSAndAudio2Face {
                     System.out.println("Set volume to maximum: " + gainControl.getValue());
                 }
                 
+                TTSCoquiEnhanced.PlaybackMetrics metrics = TTSCoquiEnhanced.consumePlaybackMetrics(filename);
                 clip.start();
+                if (metrics != null) {
+                    System.out.println(metrics.formatForLog());
+                }
                 System.out.println("Audio playback started, duration: " + (clip.getMicrosecondLength() / 1000000.0) + " seconds");
                 
                 // Wait for the audio to finish playing

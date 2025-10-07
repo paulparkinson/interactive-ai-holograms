@@ -1,20 +1,12 @@
 package oracleai.aiholo;
 
-import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.io.File;
-import javax.sound.sampled.*;
 
-import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
-import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.oracle.CreateOption;
 import dev.langchain4j.store.embedding.oracle.EmbeddingTable;
 import dev.langchain4j.store.embedding.oracle.Index;
@@ -43,11 +35,10 @@ import javax.sql.*;
 
 import java.sql.*;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 import org.springframework.http.*;
-import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -72,6 +63,95 @@ public class AIHoloController {
     private static final String OUTPUT_FILE_PATH = System.getenv("OUTPUT_FILE_PATH");
     private static final String AIHOLO_HOST_URL = System.getenv("AIHOLO_HOST_URL");
     private static final boolean IS_AUDIO2FACE = Boolean.parseBoolean(System.getenv("IS_AUDIO2FACE"));
+    
+    // TTS Engine Configuration
+    private static final String TTS_ENGINE = System.getenv("TTS_ENGINE") != null ? 
+        System.getenv("TTS_ENGINE").toUpperCase() : "GCP";
+    
+    // TTS Engine Options
+    public enum TTSEngine {
+        GCP,        // Google Cloud TTS (current default)
+        OCI,        // Oracle Cloud Infrastructure TTS (placeholder)
+        COQUI       // Coqui TTS (high-quality offline neural TTS)
+    }
+
+    private enum TTSSelection {
+        COQUI_FAST("Coqui Fast (lower latency)", TTSEngine.COQUI, TTSCoquiEnhanced.TTSQuality.FAST),
+        COQUI_BALANCED("Coqui Balanced", TTSEngine.COQUI, TTSCoquiEnhanced.TTSQuality.BALANCED),
+        COQUI_QUALITY("Coqui Quality", TTSEngine.COQUI, TTSCoquiEnhanced.TTSQuality.QUALITY),
+        GCP("Google Cloud TTS", TTSEngine.GCP, null),
+        OCI("Oracle Cloud TTS", TTSEngine.OCI, null);
+
+        private final String displayLabel;
+        private final TTSEngine engine;
+        private final TTSCoquiEnhanced.TTSQuality coquiQuality;
+
+        TTSSelection(String displayLabel, TTSEngine engine, TTSCoquiEnhanced.TTSQuality coquiQuality) {
+            this.displayLabel = displayLabel;
+            this.engine = engine;
+            this.coquiQuality = coquiQuality;
+        }
+
+        public String getDisplayLabel() {
+            return displayLabel;
+        }
+
+        public TTSEngine getEngine() {
+            return engine;
+        }
+
+        public TTSCoquiEnhanced.TTSQuality getCoquiQuality() {
+            return coquiQuality;
+        }
+
+        public static TTSSelection fromParam(String raw) {
+            if (raw == null || raw.isBlank()) {
+                return COQUI_BALANCED;
+            }
+            try {
+                return TTSSelection.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+                System.out.println("Unknown ttsMode='" + raw + "', defaulting to COQUI_BALANCED");
+                return COQUI_BALANCED;
+            }
+        }
+
+        public static TTSSelection fallbackFor(TTSSelection selection) {
+            if (selection == null) {
+                return COQUI_BALANCED;
+            }
+            switch (selection) {
+                case COQUI_FAST:
+                case COQUI_QUALITY:
+                    return COQUI_BALANCED;
+                case COQUI_BALANCED:
+                    return GCP;
+                case GCP:
+                    return COQUI_BALANCED;
+                case OCI:
+                    return GCP;
+                default:
+                    return COQUI_BALANCED;
+            }
+        }
+
+        public static TTSSelection defaultSelection() {
+            return COQUI_BALANCED;
+        }
+    }
+    
+    private static final TTSEngine ACTIVE_TTS_ENGINE;
+    
+    static {
+        try {
+            ACTIVE_TTS_ENGINE = TTSEngine.valueOf(TTS_ENGINE);
+            System.out.println("TTS Engine initialized: " + ACTIVE_TTS_ENGINE);
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException("Invalid TTS_ENGINE: " + TTS_ENGINE + 
+                ". Valid options: GCP, OCI, COQUI", e);
+        }
+    }
+    
     private static int currentAnswerIntro = 0;
     private static String aiholo_prompt_additions = "";
 
@@ -90,7 +170,9 @@ public class AIHoloController {
         }
     }
 
+    @SuppressWarnings("unused")
     private static final String DEFAULT_LANGUAGE_CODE = "es-ES";
+    @SuppressWarnings("unused")
     private static final String DEFAULT_VOICE_NAME = "es-ES-Wavenet-D";
     private final static String sql = """
                 SELECT DBMS_CLOUD_AI.GENERATE(
@@ -103,14 +185,47 @@ public class AIHoloController {
     @Autowired
     private DataSource dataSource;
 
+    @SuppressWarnings("unused")
     private static final Object metahumanLock = new Object();
     private static boolean isRecentQuestionProcessed;
+    @SuppressWarnings("unused")
     private static String languageCode = "es";
+
+    private static final String DEFAULT_FEMALE_VOICE = "en-US-Chirp3-HD-Aoede";
+    private static final Map<String, String> FEMALE_VOICE_MAP = Map.ofEntries(
+            Map.entry("EN-US", "en-US-Chirp3-HD-Aoede"),
+            Map.entry("EN-GB", "en-GB-Wavenet-A"),
+            Map.entry("EN-AU", "en-AU-Wavenet-A"),
+            Map.entry("ES-ES", "es-ES-Wavenet-D"),
+            Map.entry("ES-MX", "es-US-Wavenet-A"),
+            Map.entry("PT-BR", "pt-BR-Wavenet-D"),
+            Map.entry("FR-FR", "fr-FR-Wavenet-A"),
+            Map.entry("DE-DE", "de-DE-Wavenet-A"),
+            Map.entry("IT-IT", "it-IT-Wavenet-A"),
+            Map.entry("RO-RO", "ro-RO-Wavenet-A"),
+            Map.entry("ZH-SG", "cmn-CN-Wavenet-A"),
+            Map.entry("ZH-CN", "cmn-CN-Wavenet-A"),
+            Map.entry("JA-JP", "ja-JP-Wavenet-A"),
+            Map.entry("HI-IN", "hi-IN-Wavenet-A"),
+            Map.entry("HE-IL", "he-IL-Wavenet-A"),
+            Map.entry("AR-AE", "ar-AE-Wavenet-A"),
+            Map.entry("GA-GA", "ga-GA-Wavenet-A"),
+            Map.entry("GA-IE", "ga-GA-Wavenet-A")
+    );
+
+    private static String resolveFemaleVoice(String languageCode) {
+        String normalized = languageCode == null ? "" : languageCode.trim().toUpperCase(Locale.ROOT);
+        if (normalized.isEmpty()) {
+            return DEFAULT_FEMALE_VOICE;
+        }
+        return FEMALE_VOICE_MAP.getOrDefault(normalized, DEFAULT_FEMALE_VOICE);
+    }
 
     public AIHoloController() {
 //        startInactivityMonitor();
     }
 
+    @SuppressWarnings("unused")
     private void startInactivityMonitor() {
         System.out.println("startInactivityMonitor...");
         scheduler.scheduleAtFixedRate(() -> {
@@ -123,9 +238,9 @@ public class AIHoloController {
 //                        fileName,  TimeInWords.getTimeInWords(languageCode),
 //                    DEFAULT_LANGUAGE_CODE, DEFAULT_VOICE_NAME);
             if (IS_AUDIO2FACE) {
-                TTSAndAudio2Face.sendToAudio2Face("explainer.wav");
+                TTSCoquiEnhanced.sendToAudio2Face("explainer.wav");
             } else {
-                TTSAndAudio2Face.playAudioFile("explainer.wav");
+                TTSCoquiEnhanced.playAudioFile("explainer.wav");
             }
         }, 1, 15, TimeUnit.MINUTES);
     }
@@ -137,41 +252,8 @@ public class AIHoloController {
         AIHoloController.languageCode = languageCode;
         model.addAttribute("languageCode", languageCode);
         model.addAttribute("aiholoHostUrl", AIHOLO_HOST_URL != null ? AIHOLO_HOST_URL : "http://localhost:8080");
-        if (languageCode.equals("pt-BR"))
-            model.addAttribute("voiceName", "pt-BR-Wavenet-D");
-        else if (languageCode.equals("es-ES"))
-            model.addAttribute("voiceName", "es-ES-Wavenet-D");
-        else if (languageCode.equals("zh-SG"))
-            model.addAttribute("voiceName", "cmn-CN-Wavenet-A");
-        else if (languageCode.equals("de-DE"))
-            model.addAttribute("voiceName", "de-DE-Wavenet-A");
-        else if (languageCode.equals("es-MX"))
-            model.addAttribute("voiceName", "es-US-Wavenet-A");
-        else if (languageCode.equals("it-IT"))
-            model.addAttribute("voiceName", "it-IT-Wavenet-A");
-        else if (languageCode.equals("fr-FR"))
-            model.addAttribute("voiceName", "fr-FR-Wavenet-A");
-        else if (languageCode.equals("ro-RO"))
-            model.addAttribute("voiceName", "ro-RO-Wavenet-A");
-        else if (languageCode.equals("en-AU"))
-            model.addAttribute("voiceName", "en-AU-Wavenet-A");
-        else if (languageCode.equals("ga-GA"))
-            model.addAttribute("voiceName", "ga-GA-Wavenet-A");
-        else if (languageCode.equals("ar-AE"))
-            model.addAttribute("voiceName", "ar-AE-Wavenet-A");
-        else if (languageCode.equals("ja-JP"))
-            model.addAttribute("voiceName", "ja-JP-Wavenet-A");
-        else if (languageCode.equals("hi-IN"))
-            model.addAttribute("voiceName", "hi-IN-Wavenet-A");
-        else if (languageCode.equals("he-IL"))
-            model.addAttribute("voiceName", "he-IL-Wavenet-A");
-        else if (languageCode.equals("en-US"))
-            model.addAttribute("voiceName", "en-US-Chirp3-HD-Aoede");
-            //   model.addAttribute("voiceName", "Aoede");
-//            model.addAttribute("voiceName", "en-US-Chirp3-HD-Aoede");
-        else if (languageCode.equals("en-GB"))
-            model.addAttribute("voiceName", "en-GB-Wavenet-A");
-        else model.addAttribute("voiceName", "en-US-Wavenet-A");
+        String resolvedVoice = resolveFemaleVoice(languageCode);
+        model.addAttribute("voiceName", resolvedVoice);
         return "aiholo";
     }
 
@@ -191,9 +273,9 @@ public class AIHoloController {
             return "Error writing to file: " + e.getMessage();
         }
         if (IS_AUDIO2FACE) {
-            TTSAndAudio2Face.sendToAudio2Face("explainer.wav");
+            TTSCoquiEnhanced.sendToAudio2Face("explainer.wav");
         } else {
-            TTSAndAudio2Face.playAudioFile("explainer.wav");
+            TTSCoquiEnhanced.playAudioFile("explainer.wav");
         }
 
         return "Explained";
@@ -225,11 +307,19 @@ public class AIHoloController {
     public String play(@RequestParam("question") String question,
                        @RequestParam("selectedMode") String selectedMode,
                        @RequestParam("languageCode") String languageCode,
-                       @RequestParam("voiceName") String voicename) throws Exception {
+                       @RequestParam("voiceName") String voicename,
+                       @RequestParam(value = "ttsMode", required = false) String ttsModeParam) throws Exception {
         System.out.println(
                 "play question: " + question + " selectedMode: " + selectedMode +
                         " languageCode:" + languageCode + " voicename:" + voicename);
         System.out.println("modified question: " + question);
+        String resolvedVoiceName = resolveFemaleVoice(languageCode);
+        if (voicename == null || !voicename.equals(resolvedVoiceName)) {
+            System.out.println("Overriding requested voice with female voice: " + resolvedVoiceName);
+        }
+        voicename = resolvedVoiceName;
+        TTSSelection ttsSelection = TTSSelection.fromParam(ttsModeParam);
+        System.out.println("Requested TTS mode: " + ttsSelection.name());
         theValue = "question";
         String filePath = OUTPUT_FILE_PATH != null ? OUTPUT_FILE_PATH : "aiholo_output.txt";
         try (FileWriter writer = new FileWriter(filePath)) {
@@ -297,8 +387,10 @@ public class AIHoloController {
             }
         }).start();
 
-        String action = "chat";
-        String answer;
+    String action = "chat";
+    String answer;
+    double aiDurationMillis = 0.0;
+    String aiPipelineLabel = "Unknown pipeline";
         if (languageCode.equals("pt-BR")) answer = "Desculpe. Não consegui encontrar uma resposta no banco de dados";
         else if (languageCode.equals("es-ES"))
             answer = "Lo siento, no pude encontrar una respuesta en la base de datos.";
@@ -314,11 +406,15 @@ public class AIHoloController {
             String normalized = question.toLowerCase();
 // Check if the string contains "financ" and "agent"
             boolean financialAgentIntent = normalized.contains("financ") && normalized.contains("agent");
+            long aiStartNs = System.nanoTime();
             if (financialAgentIntent) {
+                aiPipelineLabel = "executeFinancialAgent";
                 answer = executeFinancialAgent(question);
             } else {
+                aiPipelineLabel = "executeSandbox";
                 answer = executeSandbox(question);
             }
+            aiDurationMillis = (System.nanoTime() - aiStartNs) / 1_000_000.0;
 
         } else {
             if (selectedMode.contains("use narrate")) {
@@ -328,6 +424,8 @@ public class AIHoloController {
                 question = question.replace("use chat", "").trim();
             }
             question += ". Respond in 25 words or less. " + aiholo_prompt_additions;
+            aiPipelineLabel = "Select AI/NL2SQL";
+            long aiStartNs = System.nanoTime();
             try (Connection connection = dataSource.getConnection();
                  PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
                 System.out.println("Database Connection : " + connection);
@@ -340,7 +438,9 @@ public class AIHoloController {
                     }
                 }
                 answer = response;
+                aiDurationMillis = (System.nanoTime() - aiStartNs) / 1_000_000.0;
             } catch (SQLException e) {
+                aiDurationMillis = (System.nanoTime() - aiStartNs) / 1_000_000.0;
                 System.err.println("Failed to connect to the database: " + e.getMessage());
                 return "Database Connection Failed!";
             }
@@ -353,10 +453,19 @@ public class AIHoloController {
         }
 
         System.out.println("about to TTS and sendAudioToAudio2Face for answer: " + answer);
-        TTSAndAudio2Face.processMetahuman(fileName, answer, languageCode, voicename);
-        if(answer.toLowerCase().contains("leia") || answer.toLowerCase().contains("star wars")) {
-            Thread.sleep(5);
-            leia();
+        try {
+            generateAndPlayTts(fileName, answer, languageCode, voicename, aiPipelineLabel, aiDurationMillis, ttsSelection);
+        } catch (Exception e) {
+            System.err.println("Requested TTS mode failed completely: " + e.getMessage());
+            // Fallback to original implementation
+            processMetahuman(fileName, answer, languageCode, voicename);
+        }
+        if (answer != null) {
+            String lowercaseAnswer = answer.toLowerCase();
+            if (lowercaseAnswer.contains("leia") || lowercaseAnswer.contains("star wars")) {
+                Thread.sleep(5);
+                leia();
+            }
         }
         return answer;
     }
@@ -538,14 +647,19 @@ public class AIHoloController {
                                                         @RequestParam("voiceName") String voiceName) throws Exception {
         System.out.println("TTS GCP  textToConvert = " + textToConvert + ", languageCode = " + languageCode +
                 ", ssmlGender = " + ssmlGender + ", voiceName = " + voiceName);
+        String resolvedVoiceName = resolveFemaleVoice(languageCode);
+        if (!resolvedVoiceName.equals(voiceName)) {
+            System.out.println("Ensuring female voice: overriding with " + resolvedVoiceName);
+        }
+        voiceName = resolvedVoiceName;
         try (TextToSpeechClient textToSpeechClient = TextToSpeechClient.create()) {
             System.out.println("in TTS GCP textToSpeechClient:" + textToSpeechClient + " languagecode:" + languageCode);
             SynthesisInput input = SynthesisInput.newBuilder().setText(textToConvert).build();
             VoiceSelectionParams voice =
                     VoiceSelectionParams.newBuilder()
                             .setLanguageCode(languageCode)
-                            .setSsmlGender(SsmlVoiceGender.FEMALE) // SsmlVoiceGender.NEUTRAL SsmlVoiceGender.MALE
-                            .setName(voiceName) //eg "pt-BR-Wavenet-A"
+                            .setSsmlGender(SsmlVoiceGender.FEMALE) // Force female voice
+                            .setName(voiceName) // e.g., "pt-BR-Wavenet-A"
                             .build();
             AudioConfig audioConfig =
                     AudioConfig.newBuilder()
@@ -616,7 +730,7 @@ public class AIHoloController {
                         .index(Index.ivfIndexBuilder()
                                 .createOption(CreateOption.CREATE_OR_REPLACE).build())
                         .build();
-        EmbeddingSearchResult<TextSegment> embeddingSearchResult = embeddingStore.search(embeddingSearchRequest);
+    embeddingStore.search(embeddingSearchRequest);
         return "langchain";
     }
 
@@ -681,9 +795,16 @@ public class AIHoloController {
     public String playArbitrary(
             @RequestParam("answer") String answer,
             @RequestParam("languageCode") String languageCode,
-            @RequestParam("voiceName") String voicename) {
+        @RequestParam("voiceName") String voicename,
+        @RequestParam(value = "ttsMode", required = false) String ttsModeParam) {
         System.out.println("playarbitrary answer = " + answer + ", languageCode = " + languageCode + ", voicename = " + voicename);
+        String resolvedVoiceName = resolveFemaleVoice(languageCode);
+        if (voicename == null || !voicename.equals(resolvedVoiceName)) {
+            System.out.println("playArbitrary enforcing female voice: " + resolvedVoiceName);
+        }
+        voicename = resolvedVoiceName;
         try {
+            TTSSelection ttsSelection = TTSSelection.fromParam(ttsModeParam);
             theValue = "question";
             String filePath = OUTPUT_FILE_PATH != null ? OUTPUT_FILE_PATH : "aiholo_output.txt";
             try (FileWriter writer = new FileWriter(filePath)) {
@@ -694,11 +815,183 @@ public class AIHoloController {
             } catch (IOException e) {
                 return "Error writing to file: " + e.getMessage();
             }
-            TTSAndAudio2Face.processMetahuman("output.wav", answer, languageCode, voicename);
+            generateAndPlayTts("output.wav", answer, languageCode, voicename,
+                    "Manual playback", 0.0, ttsSelection);
             return "OK";
         } catch (Exception e) {
             e.printStackTrace();
             return "Error: " + e.getMessage();
+        }
+    }
+    
+    private void generateAndPlayTts(String fileName, String textToSay, String languageCode, String voiceName,
+                                    String aiPipelineLabel, double aiDurationMillis, TTSSelection requestedMode) throws Exception {
+        String safeText = (textToSay == null || textToSay.isBlank()) ? " " : textToSay;
+        TTSSelection currentSelection = (requestedMode != null) ? requestedMode : TTSSelection.defaultSelection();
+        Exception lastError = null;
+
+        for (int attempt = 0; attempt < 2 && currentSelection != null; attempt++) {
+            long ttsStartNs = System.nanoTime();
+            try {
+                executeTtsForSelection(fileName, safeText, languageCode, voiceName, currentSelection);
+                double ttsDurationMillis = (System.nanoTime() - ttsStartNs) / 1_000_000.0;
+                TTSCoquiEnhanced.registerPlaybackMetrics(
+                        fileName,
+                        new TTSCoquiEnhanced.PlaybackMetrics(
+                                aiPipelineLabel,
+                                aiDurationMillis,
+                                ttsDurationMillis,
+                                true,
+                                currentSelection.getDisplayLabel()));
+                if (IS_AUDIO2FACE) {
+                    TTSCoquiEnhanced.sendToAudio2Face(fileName);
+                }
+                TTSCoquiEnhanced.playAudioFile(fileName);
+                return;
+            } catch (Exception error) {
+                double elapsedMillis = (System.nanoTime() - ttsStartNs) / 1_000_000.0;
+                System.err.println("TTS mode " + currentSelection.name() + " failed after " +
+                        String.format(Locale.ROOT, "%.2f", elapsedMillis) + " ms: " + error.getMessage());
+                lastError = error;
+                if (attempt == 0) {
+                    currentSelection = TTSSelection.fallbackFor(currentSelection);
+                    if (currentSelection != null) {
+                        System.out.println("Attempting fallback TTS mode: " + currentSelection.name());
+                        continue;
+                    }
+                }
+                break;
+            }
+        }
+
+        throw lastError != null ? lastError : new RuntimeException("Unable to generate TTS audio");
+    }
+
+    private void executeTtsForSelection(String fileName, String textToSay, String languageCode,
+                                        String voiceName, TTSSelection selection) throws Exception {
+        if (selection == null) {
+            selection = TTSSelection.defaultSelection();
+        }
+
+        switch (selection.getEngine()) {
+            case GCP:
+                TTSAndAudio2Face.TTS(fileName, textToSay, languageCode, voiceName);
+                break;
+            case OCI:
+                System.out.println("Oracle Cloud TTS not yet implemented; routing to Google Cloud TTS backend");
+                TTSAndAudio2Face.TTS(fileName, textToSay, languageCode, voiceName);
+                break;
+            case COQUI:
+                TTSCoquiEnhanced.TTSQuality quality = selection.getCoquiQuality() != null ?
+                        selection.getCoquiQuality() : TTSCoquiEnhanced.TTSQuality.BALANCED;
+                System.out.println("Generating Coqui TTS with quality " + quality);
+                TTSCoquiEnhanced.generateCoquiTTS(fileName, textToSay, quality, languageCode, voiceName);
+                break;
+            default:
+                throw new IllegalStateException("Unsupported TTS engine: " + selection.getEngine());
+        }
+    }
+
+    /**
+     * Configurable TTS processing method that routes to the appropriate TTS engine
+     * based on the TTS_ENGINE environment variable
+     */
+    public static void processMetahuman(String fileName, String textToSay, String languageCode, String voiceName) {
+        System.out.println("Processing TTS with engine: " + ACTIVE_TTS_ENGINE);
+        System.out.println("Text: " + textToSay);
+        String resolvedVoiceName = resolveFemaleVoice(languageCode);
+        if (voiceName == null || !voiceName.equals(resolvedVoiceName)) {
+            System.out.println("processMetahuman enforcing female voice: " + resolvedVoiceName);
+        }
+        voiceName = resolvedVoiceName;
+        
+        try {
+            switch (ACTIVE_TTS_ENGINE) {
+                case GCP:
+                    System.out.println("Using Google Cloud TTS");
+                    TTSAndAudio2Face.processMetahuman(fileName, textToSay, languageCode, voiceName);
+                    break;
+                    
+                case OCI:
+                    System.out.println("Using Oracle Cloud Infrastructure TTS (placeholder)");
+                    // TODO: Implement OCI TTS integration
+                    // For now, fall back to GCP
+                    System.out.println("OCI TTS not yet implemented, falling back to GCP");
+                    TTSAndAudio2Face.processMetahuman(fileName, textToSay, languageCode, voiceName);
+                    break;
+                    
+                case COQUI:
+                    System.out.println("Using Coqui TTS (high-quality offline neural TTS)");
+                    processCoquiTTS(fileName, textToSay, languageCode, voiceName);
+                    break;
+                    
+                default:
+                    System.err.println("Unknown TTS engine: " + ACTIVE_TTS_ENGINE + ", falling back to GCP");
+                    TTSAndAudio2Face.processMetahuman(fileName, textToSay, languageCode, voiceName);
+                    break;
+            }
+        } catch (Exception e) {
+            System.err.println("Error with " + ACTIVE_TTS_ENGINE + " TTS: " + e.getMessage());
+            // Fallback to GCP if current engine fails
+            if (ACTIVE_TTS_ENGINE != TTSEngine.GCP) {
+                System.out.println("Falling back to Google Cloud TTS");
+                try {
+                    TTSAndAudio2Face.processMetahuman(fileName, textToSay, languageCode, voiceName);
+                } catch (Exception fallbackError) {
+                    System.err.println("Fallback TTS also failed: " + fallbackError.getMessage());
+                    playErrorAudio();
+                }
+            } else {
+                playErrorAudio();
+            }
+        }
+    }
+    
+    /**
+     * Process TTS using Coqui TTS with fallback strategy
+     */
+    private static void processCoquiTTS(String fileName, String textToSay, String languageCode, String voiceName) throws Exception {
+        try {
+            // Determine TTS quality from environment or use BALANCED as default
+            String qualityEnv = System.getenv("TTS_QUALITY");
+            TTSCoquiEnhanced.TTSQuality quality = TTSCoquiEnhanced.TTSQuality.BALANCED;
+            
+            if (qualityEnv != null) {
+                try {
+                    quality = TTSCoquiEnhanced.TTSQuality.valueOf(qualityEnv.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Invalid TTS_QUALITY: " + qualityEnv + ", using BALANCED");
+                }
+            }
+            
+            // Generate TTS using Coqui
+            TTSCoquiEnhanced.generateCoquiTTS(fileName, textToSay, quality, languageCode, voiceName);
+            
+            // Handle Audio2Face or local playback
+            if (IS_AUDIO2FACE) {
+                TTSCoquiEnhanced.sendToAudio2Face(fileName);
+            } else {
+                TTSCoquiEnhanced.playAudioFile(fileName);
+            }
+            
+        } catch (Exception e) {
+            System.err.println("Coqui TTS failed: " + e.getMessage());
+            throw e; // Re-throw to trigger fallback in processMetahuman
+        }
+    }
+    
+    /**
+     * Play error audio when all TTS methods fail
+     */
+    private static void playErrorAudio() {
+        try {
+            if (IS_AUDIO2FACE) {
+                TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_SorrySpeechToken.wav");
+            } else {
+                TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_SorrySpeechToken.wav");
+            }
+        } catch (Exception errorAudioException) {
+            System.err.println("Could not play error audio: " + errorAudioException.getMessage());
         }
     }
 }

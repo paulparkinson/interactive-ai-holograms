@@ -1,5 +1,6 @@
 # Local configuration files
 build_and_run.ps1
+src/main/resources/static/audio-aiholo/output.wav
 
 # Temporary Builds
 grabdish/inventory-micronaut/build/

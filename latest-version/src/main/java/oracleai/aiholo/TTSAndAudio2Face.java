@@ -22,12 +22,15 @@ public class TTSAndAudio2Face {
     private static final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     public static void processMetahuman(String fileName, String textToSay, String languageCode, String voiceName) {
+        processMetahuman(fileName, textToSay, languageCode, voiceName, AIHoloController.isAudio2FaceEnabled());
+    }
+
+    public static void processMetahuman(String fileName, String textToSay, String languageCode, String voiceName,
+                                        boolean audio2FaceEnabled) {
         executor.submit(() -> {
             try {
                 TTS(fileName, textToSay, languageCode, voiceName);
-                // Get the IS_AUDIO2FACE setting from AIHoloController
-                boolean isAudio2Face = Boolean.parseBoolean(System.getenv("IS_AUDIO2FACE"));
-                if (isAudio2Face) {
+                if (audio2FaceEnabled) {
                     sendToAudio2Face(fileName);
                 } else {
                     playAudioFile(fileName);
@@ -39,8 +42,7 @@ public class TTSAndAudio2Face {
                 // will occur if token expired
                 //TODO might be funny and helpful to do this, ie have the system gives its status and ask for help ...
                 // sendToAudio2Face("uhoh-lookslikeIneedanewTTStoken.wav");
-                boolean isAudio2Face = Boolean.parseBoolean(System.getenv("IS_AUDIO2FACE"));
-                if (isAudio2Face) {
+                if (audio2FaceEnabled) {
                     sendToAudio2Face(AIHoloController.AUDIO_DIR_PATH + "tts-en-USFEMALEAoede_SorrySpeechToken.wav");
                 } else {
                     playAudioFile("tts-en-USFEMALEAoede_SorrySpeechToken.wav");

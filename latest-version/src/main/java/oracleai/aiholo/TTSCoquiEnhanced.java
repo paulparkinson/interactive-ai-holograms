@@ -281,7 +281,7 @@ public class TTSCoquiEnhanced {
      * Audio2Face integration (same as original)
      */
     public static void sendToAudio2Face(String fileName) {
-        if ("true".equalsIgnoreCase(System.getenv("IS_AUDIO2FACE"))) {
+        if (AIHoloController.isAudio2FaceEnabled()) {
             System.out.print("sendToAudio2Face for fileName:" + fileName + " ...");
             RestTemplate restTemplate = new RestTemplate();
             String baseUrl = "http://localhost:8011/A2F/Player/";

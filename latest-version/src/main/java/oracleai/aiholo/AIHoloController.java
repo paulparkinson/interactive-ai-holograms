@@ -6,6 +6,7 @@ import java.net.URI;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
 import dev.langchain4j.store.embedding.oracle.CreateOption;
@@ -64,7 +65,17 @@ public class AIHoloController {
     static final String AUDIO_DIR_PATH = System.getenv("AUDIO_DIR_PATH");
     private static final String OUTPUT_FILE_PATH = System.getenv("OUTPUT_FILE_PATH");
     private static final String AIHOLO_HOST_URL = System.getenv("AIHOLO_HOST_URL");
-    private static final boolean IS_AUDIO2FACE = Boolean.parseBoolean(System.getenv("IS_AUDIO2FACE"));
+    private static final AtomicBoolean AUDIO2FACE_ENABLED =
+            new AtomicBoolean(Boolean.parseBoolean(System.getenv("IS_AUDIO2FACE")));
+
+    static boolean isAudio2FaceEnabled() {
+        return AUDIO2FACE_ENABLED.get();
+    }
+
+    static void setAudio2FaceEnabled(boolean enabled) {
+        AUDIO2FACE_ENABLED.set(enabled);
+        System.out.println("Audio2Face playback " + (enabled ? "enabled" : "disabled"));
+    }
     
     // TTS Engine Configuration
     private static final String TTS_ENGINE = System.getenv("TTS_ENGINE") != null ? 
@@ -239,7 +250,7 @@ public class AIHoloController {
 //            TTSAndAudio2Face.processMetahuman(
 //                        fileName,  TimeInWords.getTimeInWords(languageCode),
 //                    DEFAULT_LANGUAGE_CODE, DEFAULT_VOICE_NAME);
-            if (IS_AUDIO2FACE) {
+            if (isAudio2FaceEnabled()) {
                 TTSCoquiEnhanced.sendToAudio2Face("explainer.wav");
             } else {
                 TTSCoquiEnhanced.playAudioFile("explainer.wav");
@@ -256,6 +267,7 @@ public class AIHoloController {
         model.addAttribute("aiholoHostUrl", AIHOLO_HOST_URL != null ? AIHOLO_HOST_URL : "http://localhost:8080");
         String resolvedVoice = resolveFemaleVoice(languageCode);
         model.addAttribute("voiceName", resolvedVoice);
+        model.addAttribute("audio2FaceEnabled", isAudio2FaceEnabled());
         return "aiholo";
     }
 
@@ -274,7 +286,7 @@ public class AIHoloController {
         } catch (IOException e) {
             return "Error writing to file: " + e.getMessage();
         }
-        if (IS_AUDIO2FACE) {
+        if (isAudio2FaceEnabled()) {
             TTSCoquiEnhanced.sendToAudio2Face("explainer.wav");
         } else {
             TTSCoquiEnhanced.playAudioFile("explainer.wav");
@@ -310,7 +322,8 @@ public class AIHoloController {
                        @RequestParam("selectedMode") String selectedMode,
                        @RequestParam("languageCode") String languageCode,
                        @RequestParam("voiceName") String voicename,
-                       @RequestParam(value = "ttsMode", required = false) String ttsModeParam) throws Exception {
+                       @RequestParam(value = "ttsMode", required = false) String ttsModeParam,
+                       @RequestParam(value = "audio2Face", required = false) Boolean audio2FaceParam) throws Exception {
         System.out.println(
                 "play question: " + question + " selectedMode: " + selectedMode +
                         " languageCode:" + languageCode + " voicename:" + voicename);
@@ -322,6 +335,10 @@ public class AIHoloController {
         voicename = resolvedVoiceName;
         TTSSelection ttsSelection = TTSSelection.fromParam(ttsModeParam);
         System.out.println("Requested TTS mode: " + ttsSelection.name());
+        if (audio2FaceParam != null) {
+            setAudio2FaceEnabled(audio2FaceParam);
+        }
+        final boolean audio2FaceEnabled = isAudio2FaceEnabled();
         theValue = "question";
         String filePath = OUTPUT_FILE_PATH != null ? OUTPUT_FILE_PATH : "aiholo_output.txt";
         try (FileWriter writer = new FileWriter(filePath)) {
@@ -344,7 +361,7 @@ public class AIHoloController {
             try {
                 // languagecode:es-MX voicename:es-US-Wavenet-A
                 if (languageCode.equals("es-MX")) {
-                    if (IS_AUDIO2FACE) {
+                    if (audio2FaceEnabled) {
                         TTSAndAudio2Face.sendToAudio2Face("tts-es-USFEMALEes-US-Wavenet-A_¡Claro!¡U.wav");
                     } else {
                         TTSAndAudio2Face.playAudioFile("tts-es-USFEMALEes-US-Wavenet-A_¡Claro!¡U.wav");
@@ -353,35 +370,35 @@ public class AIHoloController {
                     // Switch for currentAnswerIntro
                     switch (currentAnswerIntro) {
                         case 0:
-                            if (IS_AUDIO2FACE) {
+                            if (audio2FaceEnabled) {
                                 TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_Sure!Illcheck.wav");
                             } else {
                                 TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_Sure!Illcheck.wav");
                             }
                             break;
                         case 1:
-                            if (IS_AUDIO2FACE) {
+                            if (audio2FaceEnabled) {
                                 TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_on_it.wav");
                             } else {
                                 TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_on_it.wav");
                             }
                             break;
                         case 2:
-                            if (IS_AUDIO2FACE) {
+                            if (audio2FaceEnabled) {
                                 TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_one_sec.wav");
                             } else {
                                 TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_one_sec.wav");
                             }
                             break;
                         case 3:
-                            if (IS_AUDIO2FACE) {
+                            if (audio2FaceEnabled) {
                                 TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_hmm.wav");
                             } else {
                                 TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_hmm.wav");
                             }
                             break;
                         default:
-                            if (IS_AUDIO2FACE) {
+                            if (audio2FaceEnabled) {
                                 TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_Sure!Illcheck.wav");
                             } else {
                                 TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_Sure!Illcheck.wav");
@@ -461,11 +478,11 @@ public class AIHoloController {
 
         System.out.println("about to TTS and sendAudioToAudio2Face for answer: " + answer);
         try {
-            generateAndPlayTts(fileName, answer, languageCode, voicename, aiPipelineLabel, aiDurationMillis, ttsSelection);
+            generateAndPlayTts(fileName, answer, languageCode, voicename, aiPipelineLabel, aiDurationMillis, ttsSelection, audio2FaceEnabled);
         } catch (Exception e) {
             System.err.println("Requested TTS mode failed completely: " + e.getMessage());
             // Fallback to original implementation
-            processMetahuman(fileName, answer, languageCode, voicename);
+            processMetahuman(fileName, answer, languageCode, voicename, audio2FaceEnabled);
         }
         if (answer != null) {
             String lowercaseAnswer = answer.toLowerCase();
@@ -803,7 +820,8 @@ public class AIHoloController {
             @RequestParam("answer") String answer,
             @RequestParam("languageCode") String languageCode,
         @RequestParam("voiceName") String voicename,
-        @RequestParam(value = "ttsMode", required = false) String ttsModeParam) {
+        @RequestParam(value = "ttsMode", required = false) String ttsModeParam,
+        @RequestParam(value = "audio2Face", required = false) Boolean audio2FaceParam) {
         System.out.println("playarbitrary answer = " + answer + ", languageCode = " + languageCode + ", voicename = " + voicename);
         String resolvedVoiceName = resolveFemaleVoice(languageCode);
         if (voicename == null || !voicename.equals(resolvedVoiceName)) {
@@ -812,6 +830,10 @@ public class AIHoloController {
         voicename = resolvedVoiceName;
         try {
             TTSSelection ttsSelection = TTSSelection.fromParam(ttsModeParam);
+            if (audio2FaceParam != null) {
+                setAudio2FaceEnabled(audio2FaceParam);
+            }
+            boolean audio2FaceEnabled = isAudio2FaceEnabled();
             theValue = "question";
             String filePath = OUTPUT_FILE_PATH != null ? OUTPUT_FILE_PATH : "aiholo_output.txt";
             try (FileWriter writer = new FileWriter(filePath)) {
@@ -822,8 +844,8 @@ public class AIHoloController {
             } catch (IOException e) {
                 return "Error writing to file: " + e.getMessage();
             }
-            generateAndPlayTts("output.wav", answer, languageCode, voicename,
-                    "Manual playback", 0.0, ttsSelection);
+        generateAndPlayTts("output.wav", answer, languageCode, voicename,
+            "Manual playback", 0.0, ttsSelection, audio2FaceEnabled);
             return "OK";
         } catch (Exception e) {
             e.printStackTrace();
@@ -852,9 +874,10 @@ public class AIHoloController {
             System.err.println("Failed to notify video agent: " + e.getMessage());
         }
 
+        final boolean audio2FaceEnabled = isAudio2FaceEnabled();
         new Thread(() -> {
             try {
-                if (IS_AUDIO2FACE) {
+                if (audio2FaceEnabled) {
                     TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_playingvideo.wav");
                 } else {
                     TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_playingvideo.wav");
@@ -866,7 +889,8 @@ public class AIHoloController {
     }
 
     private void generateAndPlayTts(String fileName, String textToSay, String languageCode, String voiceName,
-                                    String aiPipelineLabel, double aiDurationMillis, TTSSelection requestedMode) throws Exception {
+                                    String aiPipelineLabel, double aiDurationMillis, TTSSelection requestedMode,
+                                    boolean audio2FaceEnabled) throws Exception {
         String safeText = (textToSay == null || textToSay.isBlank()) ? " " : textToSay;
         TTSSelection currentSelection = (requestedMode != null) ? requestedMode : TTSSelection.defaultSelection();
         Exception lastError = null;
@@ -884,10 +908,11 @@ public class AIHoloController {
                                 ttsDurationMillis,
                                 true,
                                 currentSelection.getDisplayLabel()));
-                if (IS_AUDIO2FACE) {
+                if (audio2FaceEnabled) {
                     TTSCoquiEnhanced.sendToAudio2Face(fileName);
+                } else {
+                    TTSCoquiEnhanced.playAudioFile(fileName);
                 }
-                TTSCoquiEnhanced.playAudioFile(fileName);
                 return;
             } catch (Exception error) {
                 double elapsedMillis = (System.nanoTime() - ttsStartNs) / 1_000_000.0;
@@ -938,6 +963,11 @@ public class AIHoloController {
      * based on the TTS_ENGINE environment variable
      */
     public static void processMetahuman(String fileName, String textToSay, String languageCode, String voiceName) {
+        processMetahuman(fileName, textToSay, languageCode, voiceName, isAudio2FaceEnabled());
+    }
+
+    public static void processMetahuman(String fileName, String textToSay, String languageCode, String voiceName,
+                                        boolean audio2FaceEnabled) {
         System.out.println("Processing TTS with engine: " + ACTIVE_TTS_ENGINE);
         System.out.println("Text: " + textToSay);
         String resolvedVoiceName = resolveFemaleVoice(languageCode);
@@ -950,7 +980,7 @@ public class AIHoloController {
             switch (ACTIVE_TTS_ENGINE) {
                 case GCP:
                     System.out.println("Using Google Cloud TTS");
-                    TTSAndAudio2Face.processMetahuman(fileName, textToSay, languageCode, voiceName);
+                    TTSAndAudio2Face.processMetahuman(fileName, textToSay, languageCode, voiceName, audio2FaceEnabled);
                     break;
                     
                 case OCI:
@@ -958,17 +988,17 @@ public class AIHoloController {
                     // TODO: Implement OCI TTS integration
                     // For now, fall back to GCP
                     System.out.println("OCI TTS not yet implemented, falling back to GCP");
-                    TTSAndAudio2Face.processMetahuman(fileName, textToSay, languageCode, voiceName);
+                    TTSAndAudio2Face.processMetahuman(fileName, textToSay, languageCode, voiceName, audio2FaceEnabled);
                     break;
                     
                 case COQUI:
                     System.out.println("Using Coqui TTS (high-quality offline neural TTS)");
-                    processCoquiTTS(fileName, textToSay, languageCode, voiceName);
+                    processCoquiTTS(fileName, textToSay, languageCode, voiceName, audio2FaceEnabled);
                     break;
                     
                 default:
                     System.err.println("Unknown TTS engine: " + ACTIVE_TTS_ENGINE + ", falling back to GCP");
-                    TTSAndAudio2Face.processMetahuman(fileName, textToSay, languageCode, voiceName);
+                    TTSAndAudio2Face.processMetahuman(fileName, textToSay, languageCode, voiceName, audio2FaceEnabled);
                     break;
             }
         } catch (Exception e) {
@@ -977,13 +1007,13 @@ public class AIHoloController {
             if (ACTIVE_TTS_ENGINE != TTSEngine.GCP) {
                 System.out.println("Falling back to Google Cloud TTS");
                 try {
-                    TTSAndAudio2Face.processMetahuman(fileName, textToSay, languageCode, voiceName);
+                    TTSAndAudio2Face.processMetahuman(fileName, textToSay, languageCode, voiceName, audio2FaceEnabled);
                 } catch (Exception fallbackError) {
                     System.err.println("Fallback TTS also failed: " + fallbackError.getMessage());
-                    playErrorAudio();
+                    playErrorAudio(audio2FaceEnabled);
                 }
             } else {
-                playErrorAudio();
+                playErrorAudio(audio2FaceEnabled);
             }
         }
     }
@@ -991,7 +1021,8 @@ public class AIHoloController {
     /**
      * Process TTS using Coqui TTS with fallback strategy
      */
-    private static void processCoquiTTS(String fileName, String textToSay, String languageCode, String voiceName) throws Exception {
+    private static void processCoquiTTS(String fileName, String textToSay, String languageCode, String voiceName,
+                                        boolean audio2FaceEnabled) throws Exception {
         try {
             // Determine TTS quality from environment or use BALANCED as default
             String qualityEnv = System.getenv("TTS_QUALITY");
@@ -1009,7 +1040,7 @@ public class AIHoloController {
             TTSCoquiEnhanced.generateCoquiTTS(fileName, textToSay, quality, languageCode, voiceName);
             
             // Handle Audio2Face or local playback
-            if (IS_AUDIO2FACE) {
+            if (audio2FaceEnabled) {
                 TTSCoquiEnhanced.sendToAudio2Face(fileName);
             } else {
                 TTSCoquiEnhanced.playAudioFile(fileName);
@@ -1024,9 +1055,9 @@ public class AIHoloController {
     /**
      * Play error audio when all TTS methods fail
      */
-    private static void playErrorAudio() {
+    private static void playErrorAudio(boolean audio2FaceEnabled) {
         try {
-            if (IS_AUDIO2FACE) {
+            if (audio2FaceEnabled) {
                 TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_SorrySpeechToken.wav");
             } else {
                 TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_SorrySpeechToken.wav");

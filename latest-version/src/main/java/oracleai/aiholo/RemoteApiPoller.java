@@ -18,9 +18,9 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class RemoteApiPoller {
     private static final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-    private static final String REMOTE_API_URL = "https://aiholo2.org/api/getValue";
-    private static final String REMOTE_API_USER = "oracleai";
-    private static final String REMOTE_API_PASSWORD = "oracleai";
+    private static final String REMOTE_API_URL = System.getenv().getOrDefault("REMOTE_API_URL", "https://aiholo2.org/api/getValue");
+    private static final String REMOTE_API_USER = System.getenv("REMOTE_API_USER");
+    private static final String REMOTE_API_PASSWORD = System.getenv("REMOTE_API_PASSWORD");
     private static final AtomicReference<String> lastRemoteValue = new AtomicReference<>(null);
 
     /**
@@ -110,16 +110,16 @@ public class RemoteApiPoller {
                                    ", voice=" + voiceName + ", tts=" + ttsSelection + ", audio2face=" + audio2FaceEnabled);
                 
                 // Call the controller's generateAndPlayTts method
-                AIHoloController.generateAndPlayTtsStatic(
-                    "output.wav",
-                    textToSay,
-                    languageCode,
-                    voiceName,
-                    aiPipelineLabel,
-                    aiDurationMillis,
-                    ttsSelection,
-                    audio2FaceEnabled
-                );
+                // AIHoloController.generateAndPlayTtsStatic(
+                //     "output.wav",
+                //     textToSay,
+                //     languageCode,
+                //     voiceName,
+                //     aiPipelineLabel,
+                //     aiDurationMillis,
+                //     ttsSelection,
+                //     audio2FaceEnabled
+                // );
             } catch (Exception e) {
                 System.err.println("Error generating TTS for remote value: " + e.getMessage());
                 e.printStackTrace();

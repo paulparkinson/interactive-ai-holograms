@@ -104,7 +104,7 @@
 <script th:inline="javascript">
     var languageCodeSTT = /*[[${languageCode} ?: 'pt-BR']]*/ 'pt-BR';
     var voiceName = /*[[${voiceName} ?: 'pt-BR-Wavenet-D']]*/ 'pt-BR-Wavenet-D';
-    var ttsMode = 'COQUI_BALANCED';
+    var ttsMode = 'GCP';
     var audio2FaceEnabled = /*[[${audio2FaceEnabled} ?: false]]*/ false;
     console.log("Using Speech Recognition Language: " + languageCodeSTT + " and VoiceName: " + voiceName);
     console.log("Speech Recognition Language Code:", languageCodeSTT);
@@ -217,7 +217,7 @@
         });
 
         if (!ttsModeOptions.some(option => option.value === ttsMode)) {
-            ttsMode = 'COQUI_BALANCED';
+            ttsMode = 'GCP';
         }
         select.value = ttsMode;
 
@@ -242,8 +242,9 @@
         <div class="col-md-4" style="margin-top: 0;">
             <span style="margin-bottom: 0; font-weight: normal; font-size: 1rem; display: block;">1. Select one...</span>
             <div class="radio-group" style="margin-top: 0;">
-                <label><input type="radio" name="mode" value="use chat" checked>Use LLM directly</label>
-                <label><input type="radio" name="mode" value="use vector">Use Oracle AI Toolkit and Optimizer</label>
+                <label><input type="radio" name="mode" value="use chatgpt">Use LLM directly</label>
+                <!-- <label><input type="radio" name="mode" value="use chat">Use NL2SQL/Select AI</label> -->
+                <label><input type="radio" name="mode" value="use vector" checked>Use Oracle AI Database</label>
             </div>
             <!-- Conversation history toggle -->
             <div class="radio-group" style="margin-top: 10px;">
@@ -310,7 +311,7 @@
 <div id="ttsSelector" style="margin-top: 8px; font-size: 0.85rem; color: #A0A0A0; text-align: right;">
     <label for="ttsModeSelect" style="margin-right: 8px;">TTS engine &amp; quality:</label>
     <select id="ttsModeSelect" style="background: #2A2F2F; color: #F1EFED; border: 1px solid #444; border-radius: 4px; padding: 4px 6px;">
-        <option value="COQUI_BALANCED">Coqui - Balanced (default)</option>
+    <option value="GCP">Google Cloud TTS</option>
     </select>
 </div>
 <script>
@@ -612,7 +613,7 @@
     document.addEventListener("DOMContentLoaded", function () {
         document.getElementById("footerLanguageCode").value = typeof languageCodeSTT !== "undefined" ? languageCodeSTT : "en-US";
         document.getElementById("footerVoiceName").value = typeof voiceName !== "undefined" ? voiceName : "en-US-Wavenet-A";
-        document.getElementById("footerTtsMode").value = typeof ttsMode !== "undefined" ? ttsMode : "COQUI_BALANCED";
+    document.getElementById("footerTtsMode").value = typeof ttsMode !== "undefined" ? ttsMode : "GCP";
         document.getElementById("footerAudio2Face").value = String(audio2FaceEnabled);
 
         document.getElementById("footerSayForm").addEventListener("submit", function (e) {

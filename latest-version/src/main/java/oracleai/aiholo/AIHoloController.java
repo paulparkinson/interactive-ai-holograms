@@ -8,6 +8,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import oracleai.common.GetSetController;
+
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
 import dev.langchain4j.store.embedding.oracle.CreateOption;
 import dev.langchain4j.store.embedding.oracle.EmbeddingTable;
@@ -51,6 +53,10 @@ import java.nio.file.Paths;
 @RequestMapping("/aiholo")
 // @CrossOrigin(origins = "*")
 public class AIHoloController {
+    
+    @Autowired
+    private ChatGPTService chatGPTService;
+    
     private String theValue = "mirrorme";
     private static final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private static final String SANDBOX_API_URL = System.getenv("SANDBOX_API_URL");
@@ -67,6 +73,8 @@ public class AIHoloController {
     private static final String AIHOLO_HOST_URL = System.getenv("AIHOLO_HOST_URL");
     private static final AtomicBoolean AUDIO2FACE_ENABLED =
             new AtomicBoolean(Boolean.parseBoolean(System.getenv("IS_AUDIO2FACE")));
+    private static final boolean REDIRECT_ANSWER = 
+            Boolean.parseBoolean(System.getenv().getOrDefault("REDIRECT_ANSWER", "true"));
 
     static boolean isAudio2FaceEnabled() {
         return AUDIO2FACE_ENABLED.get();
@@ -195,7 +203,7 @@ public class AIHoloController {
                 ) FROM dual
             """;
 
-    @Autowired
+    @Autowired(required = false)
     private DataSource dataSource;
 
     @SuppressWarnings("unused")
@@ -422,7 +430,17 @@ public class AIHoloController {
         else if (languageCode.equals("en-GB")) answer = "Sorry, I couldn't find an answer in the database.";
         else if (languageCode.equals("zh-SG")) answer = "抱歉，我在数据库中找不到答案";
         else answer = "I'm sorry. I couldn't find an answer in the database";
-        if (selectedMode.contains("use vector")) {
+        
+        if (selectedMode.contains("use chatgpt")) {
+            // Direct ChatGPT query mode
+            question = question.replace("use chatgpt", "").trim();
+            question += ". Respond in 25 words or less.";
+            aiPipelineLabel = "ChatGPT Direct";
+            long aiStartNs = System.nanoTime();
+            answer = chatGPTService.queryChatGPT(question);
+            aiDurationMillis = (System.nanoTime() - aiStartNs) / 1_000_000.0;
+            
+        } else if (selectedMode.contains("use vector")) {
             question = question.replace("use vectorrag", "").trim();
             question += ". Respond in 25 words or less. " + aiholo_prompt_additions;
             // If the user asks about a financial agent, call the Langflow financial agent
@@ -478,7 +496,11 @@ public class AIHoloController {
 
         System.out.println("about to TTS and sendAudioToAudio2Face for answer: " + answer);
         try {
-            generateAndPlayTts(fileName, answer, languageCode, voicename, aiPipelineLabel, aiDurationMillis, ttsSelection, audio2FaceEnabled);
+            if (REDIRECT_ANSWER) {
+                executeRedirect(answer, languageCode, voicename, aiPipelineLabel, aiDurationMillis, ttsSelection, audio2FaceEnabled);
+            } else {
+                generateAndPlayTts(fileName, answer, languageCode, voicename, aiPipelineLabel, aiDurationMillis, ttsSelection, audio2FaceEnabled);
+            }
         } catch (Exception e) {
             System.err.println("Requested TTS mode failed completely: " + e.getMessage());
             // Fallback to original implementation
@@ -886,6 +908,32 @@ public class AIHoloController {
                 System.err.println("Failed to play video agent audio: " + audioError.getMessage());
             }
         }).start();
+    }
+
+    /**
+     * Execute redirect - stores answer parameters as JSON in GetSetController instead of playing audio
+     */
+    private void executeRedirect(String textToSay, String languageCode, String voiceName,
+                                String aiPipelineLabel, double aiDurationMillis, TTSSelection ttsSelection,
+                                boolean audio2FaceEnabled) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("textToSay", textToSay != null ? textToSay : "");
+            json.put("languageCode", languageCode != null ? languageCode : "");
+            json.put("voiceName", voiceName != null ? voiceName : "");
+            json.put("aiPipelineLabel", aiPipelineLabel != null ? aiPipelineLabel : "");
+            json.put("aiDurationMillis", aiDurationMillis);
+            json.put("ttsSelection", ttsSelection != null ? ttsSelection.name() : "");
+            json.put("audio2FaceEnabled", audio2FaceEnabled);
+            json.put("timestamp", System.currentTimeMillis());
+            
+            String jsonString = json.toString();
+            GetSetController.setValue(jsonString);
+            System.out.println("Redirect answer stored in GetSetController: " + jsonString);
+        } catch (Exception e) {
+            System.err.println("Error in executeRedirect: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     private void generateAndPlayTts(String fileName, String textToSay, String languageCode, String voiceName,

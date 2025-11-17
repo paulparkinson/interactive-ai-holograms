@@ -72,10 +72,49 @@ public class RemoteApiPoller {
             
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 String body = response.getBody().trim();
-                return new JSONObject(body);
+                
+                // Handle malformed JSON where inner JSON is not properly escaped
+                if (body.startsWith("{\"type\":\"redirect\",\"value\":\"")) {
+                    // Extract the inner JSON manually
+                    int valueStart = body.indexOf("\"value\":\"") + 9; // Position after "value":"
+                    int valueEnd = body.lastIndexOf("\"}"); // Position before final "}
+                    
+                    if (valueStart > 8 && valueEnd > valueStart) {
+                        String innerJsonString = body.substring(valueStart, valueEnd);
+                        try {
+                            return new JSONObject(innerJsonString);
+                        } catch (Exception innerEx) {
+                            System.err.println("Failed to parse extracted inner JSON: " + innerEx.getMessage());
+                        }
+                    }
+                }
+                
+                // Try normal JSON parsing as fallback
+                try {
+                    JSONObject outerJson = new JSONObject(body);
+                    
+                    // Check if this is the wrapped format with "type" and "value"
+                    if (outerJson.has("value") && outerJson.has("type")) {
+                        String innerJsonString = outerJson.getString("value");
+                        return new JSONObject(innerJsonString);
+                    } else {
+                        // Direct JSON format
+                        return outerJson;
+                    }
+                } catch (Exception jsonEx) {
+                    System.err.println("Failed to parse JSON response. Raw body was: '" + body + "'");
+                    System.err.println("JSON parsing error: " + jsonEx.getMessage());
+                    return null;
+                }
+            } else {
+                System.err.println("API request failed. Status: " + response.getStatusCode() + 
+                                 ", Body: " + (response.getBody() != null ? "'" + response.getBody() + "'" : "null"));
             }
         } catch (Exception e) {
-            System.err.println("Failed to poll remote API: " + e.getMessage());
+            System.err.println("Failed to poll remote API: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+            if (e.getCause() != null) {
+                System.err.println("Caused by: " + e.getCause().getMessage());
+            }
         }
         return null;
     }
@@ -109,17 +148,27 @@ public class RemoteApiPoller {
                 System.out.println("Triggering TTS: text='" + textToSay + "', lang=" + languageCode + 
                                    ", voice=" + voiceName + ", tts=" + ttsSelection + ", audio2face=" + audio2FaceEnabled);
                 
-                // Call the controller's generateAndPlayTts method
-                // AIHoloController.generateAndPlayTtsStatic(
-                //     "output.wav",
-                //     textToSay,
-                //     languageCode,
-                //     voiceName,
-                //     aiPipelineLabel,
-                //     aiDurationMillis,
-                //     ttsSelection,
-                //     audio2FaceEnabled
-                // );
+                // Check if this is an "explainer" request - play pre-recorded audio instead of generating TTS
+                if ("explainer".equalsIgnoreCase(textToSay)) {
+                    System.out.println("Playing pre-recorded explainer audio");
+                    if (audio2FaceEnabled) {
+                        TTSCoquiEnhanced.sendToAudio2Face("explainer.wav");
+                    } else {
+                        TTSCoquiEnhanced.playAudioFile("explainer.wav");
+                    }
+                } else {
+                    // Call the controller's generateAndPlayTts method for normal TTS generation
+                    AIHoloController.generateAndPlayTtsStatic(
+                        "output.wav",
+                        textToSay,
+                        languageCode,
+                        voiceName,
+                        aiPipelineLabel,
+                        aiDurationMillis,
+                        ttsSelection,
+                        audio2FaceEnabled
+                    );
+                }
             } catch (Exception e) {
                 System.err.println("Error generating TTS for remote value: " + e.getMessage());
                 e.printStackTrace();

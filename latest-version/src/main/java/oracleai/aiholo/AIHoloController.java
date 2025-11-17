@@ -2,7 +2,6 @@ package oracleai.aiholo;
 
 import java.io.FileWriter;
 import java.io.IOException;
-import java.net.URI;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -43,11 +42,12 @@ import java.util.Locale;
 import java.util.Map;
 
 import org.springframework.http.*;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import oracleai.aiholo.agents.*;
+import java.util.*;
 
 @Controller
 @RequestMapping("/aiholo")
@@ -61,6 +61,7 @@ public class AIHoloController {
     private static final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private static final String SANDBOX_API_URL = System.getenv("SANDBOX_API_URL");
     private static final String AI_OPTIMZER = System.getenv("AI_OPTIMZER");
+    private static final String OPENAI_KEY = System.getenv("OPENAI_KEY");
     // Langflow API configuration. These environment variables should be set
     // when deploying the application. LANGFLOW_SERVER_URL is the base URL for
     // the Langflow server (for example, http://host:7860/api), FLOW_ID is the
@@ -75,6 +76,72 @@ public class AIHoloController {
             new AtomicBoolean(Boolean.parseBoolean(System.getenv("IS_AUDIO2FACE")));
     private static final boolean REDIRECT_ANSWER = 
             Boolean.parseBoolean(System.getenv().getOrDefault("REDIRECT_ANSWER", "true"));
+    private static int audioDelayMs = 500; // Default delay between dual audio outputs in milliseconds
+
+    // Agent registration system
+    private static final List<Agent> registeredAgents = new ArrayList<>();
+    
+    static {
+        // Register agents at startup (order matters - first match wins)
+        registerAgent(new MirrorMeAgent(OUTPUT_FILE_PATH));
+        registerAgent(new DigitalTwinAgent(OUTPUT_FILE_PATH));
+        registerAgent(new SignAgent(OUTPUT_FILE_PATH));
+        registerAgent(new FinancialAgent(LANGFLOW_SERVER_URL, LANGFLOW_FLOW_ID, LANGFLOW_API_KEY));
+        registerAgent(new GamerAgent(OPENAI_KEY));
+        // OptimizerToolkitAgent commented out - backend not working
+        // registerAgent(new OptimizerToolkitAgent(SANDBOX_API_URL, AI_OPTIMZER));
+        // DirectLLMAgent is the default fallback (registered last, no keywords)
+        registerAgent(new DirectLLMAgent(OPENAI_KEY));
+    }
+
+    /**
+     * Register an agent to handle specific types of questions.
+     * Agents are checked in registration order.
+     */
+    public static void registerAgent(Agent agent) {
+        if (agent.isConfigured()) {
+            registeredAgents.add(agent);
+            System.out.println("Registered agent: " + agent.getName());
+        } else {
+            System.out.println("Skipping agent (not configured): " + agent.getName());
+        }
+    }
+
+    /**
+     * Find an agent that can handle the given question based on keyword matching.
+     * @param question The normalized (lowercase) question
+     * @return The matching agent, or null if no match
+     */
+    private static Agent findAgentForQuestion(String question) {
+        Agent fallbackAgent = null;
+        
+        for (Agent agent : registeredAgents) {
+            String[][] keywords = agent.getKeywords();
+            
+            // If agent has no keywords, it's a fallback agent (like DirectLLMAgent)
+            if (keywords.length == 0) {
+                fallbackAgent = agent;
+                continue;
+            }
+            
+            // Check if any keyword set matches
+            for (String[] keywordSet : keywords) {
+                boolean allMatch = true;
+                for (String keyword : keywordSet) {
+                    if (!question.contains(keyword.toLowerCase())) {
+                        allMatch = false;
+                        break;
+                    }
+                }
+                if (allMatch) {
+                    return agent;
+                }
+            }
+        }
+        
+        // If no specific agent matched, return the fallback agent
+        return fallbackAgent;
+    }
 
     static boolean isAudio2FaceEnabled() {
         return AUDIO2FACE_ENABLED.get();
@@ -96,7 +163,7 @@ public class AIHoloController {
         COQUI       // Coqui TTS (high-quality offline neural TTS)
     }
 
-    private enum TTSSelection {
+    enum TTSSelection {
         COQUI_FAST("Coqui Fast (lower latency)", TTSEngine.COQUI, TTSCoquiEnhanced.TTSQuality.FAST),
         COQUI_BALANCED("Coqui Balanced", TTSEngine.COQUI, TTSCoquiEnhanced.TTSQuality.BALANCED),
         COQUI_QUALITY("Coqui Quality", TTSEngine.COQUI, TTSCoquiEnhanced.TTSQuality.QUALITY),
@@ -234,7 +301,7 @@ public class AIHoloController {
             Map.entry("GA-IE", "ga-GA-Wavenet-A")
     );
 
-    private static String resolveFemaleVoice(String languageCode) {
+    static String resolveFemaleVoice(String languageCode) {
         String normalized = languageCode == null ? "" : languageCode.trim().toUpperCase(Locale.ROOT);
         if (normalized.isEmpty()) {
             return DEFAULT_FEMALE_VOICE;
@@ -244,6 +311,7 @@ public class AIHoloController {
 
     public AIHoloController() {
 //        startInactivityMonitor();
+        // RemoteApiPoller.startPolling();
     }
 
     @SuppressWarnings("unused")
@@ -261,6 +329,10 @@ public class AIHoloController {
             if (isAudio2FaceEnabled()) {
                 TTSCoquiEnhanced.sendToAudio2Face("explainer.wav");
             } else {
+                // Play audio to VB-Audio Virtual Cable (for Unreal Live Link Hub)
+                TTSCoquiEnhanced.playAudioFileToDevice("explainer.wav", "CABLE");
+                // Wait ~800ms then play to default speakers
+                try { Thread.sleep(audioDelayMs); } catch (InterruptedException e) { }
                 TTSCoquiEnhanced.playAudioFile("explainer.wav");
             }
         }, 1, 15, TimeUnit.MINUTES);
@@ -297,6 +369,10 @@ public class AIHoloController {
         if (isAudio2FaceEnabled()) {
             TTSCoquiEnhanced.sendToAudio2Face("explainer.wav");
         } else {
+            // Play audio for Unreal Live Link Hub source (first output)
+            TTSCoquiEnhanced.playAudioFileToDevice("explainer.wav", "CABLE");
+            // Wait ~800ms then play to local speaker (second output)
+            try { Thread.sleep(audioDelayMs); } catch (InterruptedException e) { }
             TTSCoquiEnhanced.playAudioFile("explainer.wav");
         }
 
@@ -331,7 +407,8 @@ public class AIHoloController {
                        @RequestParam("languageCode") String languageCode,
                        @RequestParam("voiceName") String voicename,
                        @RequestParam(value = "ttsMode", required = false) String ttsModeParam,
-                       @RequestParam(value = "audio2Face", required = false) Boolean audio2FaceParam) throws Exception {
+                       @RequestParam(value = "audio2Face", required = false) Boolean audio2FaceParam,
+                       @RequestParam(value = "audioDelayMs", required = false, defaultValue = "500") Integer audioDelayMs) throws Exception {
         System.out.println(
                 "play question: " + question + " selectedMode: " + selectedMode +
                         " languageCode:" + languageCode + " voicename:" + voicename);
@@ -346,6 +423,10 @@ public class AIHoloController {
         if (audio2FaceParam != null) {
             setAudio2FaceEnabled(audio2FaceParam);
         }
+        if (audioDelayMs != null) {
+            AIHoloController.audioDelayMs = audioDelayMs;
+            System.out.println("Audio delay set to: " + audioDelayMs + "ms");
+        }
         final boolean audio2FaceEnabled = isAudio2FaceEnabled();
         theValue = "question";
         String filePath = OUTPUT_FILE_PATH != null ? OUTPUT_FILE_PATH : "aiholo_output.txt";
@@ -358,11 +439,12 @@ public class AIHoloController {
             return "Error writing to file: " + e.getMessage();
         }
             String normalized = question.toLowerCase();
-            boolean videoAgentIntent = normalized.contains("video") && normalized.contains("agent");
-            if (videoAgentIntent) {
-                triggerVideoAgent("leia");
-                return "Triggered video agent";
-            }   
+            // Commented out - this was interfering with GamerAgent keyword matching
+            // boolean videoAgentIntent = normalized.contains("video") && normalized.contains("agent");
+            // if (videoAgentIntent) {
+            //     triggerVideoAgent("leia");
+            //     return "Triggered video agent";
+            // }   
 
         // Start a new thread to call TTSAndAudio2Face.sendToAudio2Face with intro switching
         new Thread(() -> {
@@ -372,6 +454,10 @@ public class AIHoloController {
                     if (audio2FaceEnabled) {
                         TTSAndAudio2Face.sendToAudio2Face("tts-es-USFEMALEes-US-Wavenet-A_¡Claro!¡U.wav");
                     } else {
+                        // Play audio for Unreal Live Link Hub source (first output)
+                        TTSAndAudio2Face.playAudioFileToDevice("tts-es-USFEMALEes-US-Wavenet-A_¡Claro!¡U.wav", "CABLE");
+                        // Wait ~800ms then play to local speaker (second output)
+                        try { Thread.sleep(audioDelayMs); } catch (InterruptedException e) { }
                         TTSAndAudio2Face.playAudioFile("tts-es-USFEMALEes-US-Wavenet-A_¡Claro!¡U.wav");
                     }
                 } else {
@@ -381,6 +467,10 @@ public class AIHoloController {
                             if (audio2FaceEnabled) {
                                 TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_Sure!Illcheck.wav");
                             } else {
+                                // Play audio for Unreal Live Link Hub source (first output)
+                                TTSAndAudio2Face.playAudioFileToDevice("tts-en-USFEMALEAoede_Sure!Illcheck.wav", "CABLE");
+                                // Wait ~800ms then play to local speaker (second output)
+                                try { Thread.sleep(audioDelayMs); } catch (InterruptedException e) { }
                                 TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_Sure!Illcheck.wav");
                             }
                             break;
@@ -388,6 +478,10 @@ public class AIHoloController {
                             if (audio2FaceEnabled) {
                                 TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_on_it.wav");
                             } else {
+                                // Play audio for Unreal Live Link Hub source (first output)
+                                TTSAndAudio2Face.playAudioFileToDevice("tts-en-USFEMALEAoede_on_it.wav", "CABLE");
+                                // Wait ~800ms then play to local speaker (second output)
+                                try { Thread.sleep(audioDelayMs); } catch (InterruptedException e) { }
                                 TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_on_it.wav");
                             }
                             break;
@@ -395,6 +489,10 @@ public class AIHoloController {
                             if (audio2FaceEnabled) {
                                 TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_one_sec.wav");
                             } else {
+                                // Play audio for Unreal Live Link Hub source (first output)
+                                TTSAndAudio2Face.playAudioFileToDevice("tts-en-USFEMALEAoede_one_sec.wav", "CABLE");
+                                // Wait ~800ms then play to local speaker (second output)
+                                try { Thread.sleep(audioDelayMs); } catch (InterruptedException e) { }
                                 TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_one_sec.wav");
                             }
                             break;
@@ -402,6 +500,10 @@ public class AIHoloController {
                             if (audio2FaceEnabled) {
                                 TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_hmm.wav");
                             } else {
+                                // Play audio for Unreal Live Link Hub source (first output)
+                                TTSAndAudio2Face.playAudioFileToDevice("tts-en-USFEMALEAoede_hmm.wav", "CABLE");
+                                // Wait ~800ms then play to local speaker (second output)
+                                try { Thread.sleep(audioDelayMs); } catch (InterruptedException e) { }
                                 TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_hmm.wav");
                             }
                             break;
@@ -409,6 +511,10 @@ public class AIHoloController {
                             if (audio2FaceEnabled) {
                                 TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_Sure!Illcheck.wav");
                             } else {
+                                // Play audio for Unreal Live Link Hub source (first output)
+                                TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_Sure!Illcheck.wav");
+                                // Wait ~800ms then play to local speaker (second output)
+                                try { Thread.sleep(audioDelayMs); } catch (InterruptedException e) { }
                                 TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_Sure!Illcheck.wav");
                             }
                     }
@@ -443,15 +549,24 @@ public class AIHoloController {
         } else if (selectedMode.contains("use vector")) {
             question = question.replace("use vectorrag", "").trim();
             question += ". Respond in 25 words or less. " + aiholo_prompt_additions;
-            // If the user asks about a financial agent, call the Langflow financial agent
-            // instead of the generic sandbox. The comparison is case-insensitive to
-            // capture variations like "Financial Agent" or "financial agent".
-// Check if the string contains "financ" and "agent"
-            boolean financialAgentIntent = normalized.contains("financ") && normalized.contains("agent");
+            
+            // Check if any registered agent can handle this question
+            Agent matchingAgent = findAgentForQuestion(normalized);
+            
             long aiStartNs = System.nanoTime();
-            if (financialAgentIntent) {
-                aiPipelineLabel = "executeFinancialAgent";
-                answer = executeFinancialAgent(question);
+            if (matchingAgent != null) {
+                aiPipelineLabel = matchingAgent.getName();
+                // Write agent value name to output file
+                theValue = matchingAgent.getValueName();
+                try (FileWriter writer = new FileWriter(filePath)) {
+                    JSONObject json = new JSONObject();
+                    json.put("data", theValue);
+                    writer.write(json.toString());
+                    writer.flush();
+                } catch (IOException e) {
+                    System.err.println("Error writing agent name to file: " + e.getMessage());
+                }
+                answer = matchingAgent.processQuestion(question);
             } else {
                 aiPipelineLabel = "executeSandbox";
                 answer = executeSandbox(question);
@@ -563,17 +678,12 @@ public class AIHoloController {
     }
 
     /**
-     * Invoke a Langflow flow that acts as a financial agent. This method builds
-     * a JSON payload containing the user's question and sends it to the
-     * Langflow /v1/run endpoint for the configured flow. It uses the
-     * LANGFLOW_API_KEY for authentication and parses the nested response to
-     * extract the chat message. The environment variables LANGFLOW_SERVER_URL
-     * and LANGFLOW_FLOW_ID must be defined; otherwise, this method will
-     * return an error message.
-     *
-     * @param question The user's question to send to the financial agent.
-     * @return The agent's textual response or an error message if the call fails.
+     * DEPRECATED: This method has been replaced by the FinancialAgent class.
+     * The agent registration system now handles financial agent queries.
+     * 
+     * @deprecated Use the Agent registration system instead
      */
+    /*
     public String executeFinancialAgent(String question) {
         System.out.println("using financial agent: " + question);
         if (LANGFLOW_SERVER_URL == null || LANGFLOW_FLOW_ID == null || LANGFLOW_API_KEY == null) {
@@ -677,9 +787,10 @@ public class AIHoloController {
             return "Error calling Langflow: " + e.getMessage();
         }
     }
+    */
 
     /**
-     * Utilites not required by Interactive AI Holograms from here to end...
+     * Utilities not required by Interactive AI Holograms from here to end...
      */
 
 
@@ -843,7 +954,8 @@ public class AIHoloController {
             @RequestParam("languageCode") String languageCode,
         @RequestParam("voiceName") String voicename,
         @RequestParam(value = "ttsMode", required = false) String ttsModeParam,
-        @RequestParam(value = "audio2Face", required = false) Boolean audio2FaceParam) {
+        @RequestParam(value = "audio2Face", required = false) Boolean audio2FaceParam,
+        @RequestParam(value = "audioDelayMs", required = false, defaultValue = "500") Integer audioDelayMs) {
         System.out.println("playarbitrary answer = " + answer + ", languageCode = " + languageCode + ", voicename = " + voicename);
         String resolvedVoiceName = resolveFemaleVoice(languageCode);
         if (voicename == null || !voicename.equals(resolvedVoiceName)) {
@@ -854,6 +966,10 @@ public class AIHoloController {
             TTSSelection ttsSelection = TTSSelection.fromParam(ttsModeParam);
             if (audio2FaceParam != null) {
                 setAudio2FaceEnabled(audio2FaceParam);
+            }
+            if (audioDelayMs != null) {
+                AIHoloController.audioDelayMs = audioDelayMs;
+                System.out.println("Audio delay set to: " + audioDelayMs + "ms");
             }
             boolean audio2FaceEnabled = isAudio2FaceEnabled();
             theValue = "question";
@@ -875,6 +991,8 @@ public class AIHoloController {
         }
     }
     
+    // Commented out - video agent functionality moved to agent system
+    /*
     private static void triggerVideoAgent(String providedValue) {
         try {
             RestTemplate restTemplate = new RestTemplate();
@@ -902,6 +1020,10 @@ public class AIHoloController {
                 if (audio2FaceEnabled) {
                     TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_playingvideo.wav");
                 } else {
+                    // Play audio for Unreal Live Link Hub source (first output)
+                    TTSAndAudio2Face.playAudioFileToDevice("tts-en-USFEMALEAoede_playingvideo.wav", "CABLE");
+                    // Wait ~800ms then play to local speaker (second output)
+                    try { Thread.sleep(audioDelayMs); } catch (InterruptedException e) { }
                     TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_playingvideo.wav");
                 }
             } catch (Exception audioError) {
@@ -909,6 +1031,7 @@ public class AIHoloController {
             }
         }).start();
     }
+    */
 
     /**
      * Execute redirect - stores answer parameters as JSON in GetSetController instead of playing audio
@@ -959,6 +1082,10 @@ public class AIHoloController {
                 if (audio2FaceEnabled) {
                     TTSCoquiEnhanced.sendToAudio2Face(fileName);
                 } else {
+                    // Play audio for Unreal Live Link Hub source (first output)
+                    TTSCoquiEnhanced.playAudioFileToDevice(fileName, "CABLE");
+                    // Wait ~800ms then play to local speaker (second output)
+                    try { Thread.sleep(audioDelayMs); } catch (InterruptedException e) { }
                     TTSCoquiEnhanced.playAudioFile(fileName);
                 }
                 return;
@@ -979,6 +1106,18 @@ public class AIHoloController {
         }
 
         throw lastError != null ? lastError : new RuntimeException("Unable to generate TTS audio");
+    }
+
+    /**
+     * Static wrapper for generateAndPlayTts to allow external classes (like RemoteApiPoller) to trigger TTS.
+     */
+    static void generateAndPlayTtsStatic(String fileName, String textToSay, String languageCode, String voiceName,
+                                         String aiPipelineLabel, double aiDurationMillis, TTSSelection requestedMode,
+                                         boolean audio2FaceEnabled) throws Exception {
+        // Create a temporary instance to call the instance method
+        // Note: This works because generateAndPlayTts doesn't depend on instance state
+        new AIHoloController().generateAndPlayTts(fileName, textToSay, languageCode, voiceName,
+                aiPipelineLabel, aiDurationMillis, requestedMode, audio2FaceEnabled);
     }
 
     private void executeTtsForSelection(String fileName, String textToSay, String languageCode,

@@ -27,6 +27,7 @@ spring:
   cloud:
     oci:
       config:
+        enabled: false  # Disable OCI auto-configuration by default
         type: FILE
         # Uncomment and configure the following when you have OCI config file
         # profile: DEFAULT
@@ -62,7 +63,7 @@ spring:
 #    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
 
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${SERVER_PORT:80}
 #  port: 8444
 #  port: 443
   tomcat:
@@ -70,10 +71,8 @@ server:
   ssl:
     enabled: ${SSL_ENABLED:false}
     key-store-type: PKCS12
-#    key-store: classpath:keystore.p12
-    key-store: ${SSL_KEY_STORE:classpath:aiholoorg.p12}
+    key-store: ${SSL_KEY_STORE:classpath:aiholo2org.p12}
     key-store-password: ${SSL_KEY_STORE_PASSWORD:Welcome1}
-#    key-alias: springboot
     key-alias: ${SSL_KEY_ALIAS:aiholoorg}
 
 ---

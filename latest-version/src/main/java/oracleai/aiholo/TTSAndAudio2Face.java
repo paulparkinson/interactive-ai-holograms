@@ -22,12 +22,15 @@ public class TTSAndAudio2Face {
     private static final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     public static void processMetahuman(String fileName, String textToSay, String languageCode, String voiceName) {
+        processMetahuman(fileName, textToSay, languageCode, voiceName, AIHoloController.isAudio2FaceEnabled());
+    }
+
+    public static void processMetahuman(String fileName, String textToSay, String languageCode, String voiceName,
+                                        boolean audio2FaceEnabled) {
         executor.submit(() -> {
             try {
                 TTS(fileName, textToSay, languageCode, voiceName);
-                // Get the IS_AUDIO2FACE setting from AIHoloController
-                boolean isAudio2Face = Boolean.parseBoolean(System.getenv("IS_AUDIO2FACE"));
-                if (isAudio2Face) {
+                if (audio2FaceEnabled) {
                     sendToAudio2Face(fileName);
                 } else {
                     playAudioFile(fileName);
@@ -39,8 +42,7 @@ public class TTSAndAudio2Face {
                 // will occur if token expired
                 //TODO might be funny and helpful to do this, ie have the system gives its status and ask for help ...
                 // sendToAudio2Face("uhoh-lookslikeIneedanewTTStoken.wav");
-                boolean isAudio2Face = Boolean.parseBoolean(System.getenv("IS_AUDIO2FACE"));
-                if (isAudio2Face) {
+                if (audio2FaceEnabled) {
                     sendToAudio2Face(AIHoloController.AUDIO_DIR_PATH + "tts-en-USFEMALEAoede_SorrySpeechToken.wav");
                 } else {
                     playAudioFile("tts-en-USFEMALEAoede_SorrySpeechToken.wav");
@@ -160,7 +162,11 @@ public class TTSAndAudio2Face {
                     System.out.println("Set volume to maximum: " + gainControl.getValue());
                 }
                 
+                TTSCoquiEnhanced.PlaybackMetrics metrics = TTSCoquiEnhanced.consumePlaybackMetrics(filename);
                 clip.start();
+                if (metrics != null) {
+                    System.out.println(metrics.formatForLog());
+                }
                 System.out.println("Audio playback started, duration: " + (clip.getMicrosecondLength() / 1000000.0) + " seconds");
                 
                 // Wait for the audio to finish playing
@@ -178,9 +184,99 @@ public class TTSAndAudio2Face {
         }).start();
     }
 
+    /**
+     * List all available audio output devices
+     */
+    public static void listAudioDevices() {
+        System.out.println("\n=== Available Audio Output Devices ===");
+        Mixer.Info[] mixers = AudioSystem.getMixerInfo();
+        for (int i = 0; i < mixers.length; i++) {
+            Mixer mixer = AudioSystem.getMixer(mixers[i]);
+            Line.Info[] targetLines = mixer.getTargetLineInfo();
+            if (targetLines.length > 0) {
+                System.out.println(i + ": " + mixers[i].getName() + 
+                                 " - " + mixers[i].getDescription());
+            }
+        }
+        System.out.println("=====================================\n");
+    }
 
-
-
+    /**
+     * Play audio file to a specific output device (for Virtual Cable routing)
+     * @param filename The audio file to play
+     * @param deviceName Partial name of the device (e.g., "CABLE" for VB-Audio Virtual Cable)
+     */
+    public static void playAudioFileToDevice(String filename, String deviceName) {
+        new Thread(() -> {
+            try {
+                String fullPath = Paths.get(AIHoloController.AUDIO_DIR_PATH, filename).toString();
+                File audioFile = new File(fullPath);
+                
+                if (!audioFile.exists()) {
+                    System.err.println("Audio file not found: " + fullPath);
+                    return;
+                }
+                
+                System.out.println("Playing audio to device containing '" + deviceName + "': " + fullPath);
+                
+                // Find the mixer that matches the device name and supports Clip output
+                Mixer.Info[] mixers = AudioSystem.getMixerInfo();
+                Mixer targetMixer = null;
+                for (Mixer.Info mixerInfo : mixers) {
+                    if (mixerInfo.getName().toLowerCase().contains(deviceName.toLowerCase())) {
+                        Mixer mixer = AudioSystem.getMixer(mixerInfo);
+                        // Check if this mixer supports Clip as a source line (output)
+                        Line.Info[] sourceLines = mixer.getSourceLineInfo();
+                        boolean supportsClip = false;
+                        for (Line.Info lineInfo : sourceLines) {
+                            if (lineInfo.getLineClass().equals(Clip.class)) {
+                                supportsClip = true;
+                                break;
+                            }
+                        }
+                        if (supportsClip) {
+                            targetMixer = mixer;
+                            System.out.println("Using audio device: " + mixerInfo.getName());
+                            break;
+                        }
+                    }
+                }
+                
+                if (targetMixer == null) {
+                    System.err.println("Device containing '" + deviceName + "' not found or doesn't support audio output. Using default device.");
+                    playAudioFile(filename);  // Fallback to default
+                    return;
+                }
+                
+                // Load and play audio through the selected mixer
+                AudioInputStream audioStream = AudioSystem.getAudioInputStream(audioFile);
+                AudioFormat format = audioStream.getFormat();
+                
+                DataLine.Info info = new DataLine.Info(Clip.class, format);
+                Clip clip = (Clip) targetMixer.getLine(info);
+                clip.open(audioStream);
+                
+                // Set volume to maximum (if supported)
+                if (clip.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
+                    FloatControl gainControl = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
+                    gainControl.setValue(gainControl.getMaximum());
+                }
+                
+                clip.start();
+                System.out.println("Audio playback started on specific device, duration: " + 
+                                 (clip.getMicrosecondLength() / 1000000.0) + " seconds");
+                
+                // Wait for the audio to finish playing
+                Thread.sleep(clip.getMicrosecondLength() / 1000);
+                
+                clip.close();
+                audioStream.close();
+                
+            } catch (Exception e) {
+                System.err.println("Error playing audio to specific device: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }).start();
+    }
 
 }
-

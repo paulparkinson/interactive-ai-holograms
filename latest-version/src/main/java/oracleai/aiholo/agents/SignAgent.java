@@ -42,7 +42,7 @@ public class SignAgent implements Agent {
 
     @Override
     public String getValueName() {
-        return "signagent";
+        return "financialagent"; // Write same value as FinancialAgent for consistency
     }
 
     @Override

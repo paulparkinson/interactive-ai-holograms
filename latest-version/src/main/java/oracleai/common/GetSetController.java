@@ -1,29 +1,64 @@
 package oracleai.common;
 
+import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 
-@RestController
-@RequestMapping("/api")
+@Controller
+@RequestMapping("/status")
 public class GetSetController {
-    
-    private static String theValue = "default value";
-    
-    @GetMapping("/getValue")
+
+    // Simple static string storage without file operations
+    private static String simpleValue = "default";
+    private static String aiholoType = "default";
+    private static String aiholoValue = "default";
+
+    @GetMapping("/simple/set")
+    @ResponseBody
+    public String setSimpleValue(@RequestParam("value") String value) { 
+        simpleValue = value;
+        System.out.println("Simple set: " + simpleValue);
+        return "Simple value set successfully: " + simpleValue;
+    }
+
+    @GetMapping("/simple/get")
+    @ResponseBody
+    public String getSimpleValue() {
+       // System.out.println("Simple get: " + simpleValue);
+        return simpleValue;
+    }
+
+    @GetMapping("/aiholo/set")
+    @ResponseBody
+    public String setValue(@RequestParam("value") String value,
+                          @RequestParam(value = "type", defaultValue = "default") String type) {
+        try {
+            // URL decode the parameters since they come from GET request
+            aiholoValue = URLDecoder.decode(value, StandardCharsets.UTF_8);
+            aiholoType = URLDecoder.decode(type, StandardCharsets.UTF_8);
+            
+            System.out.println("aiholoValue set - value: " + aiholoValue + ", type: " + aiholoType);
+            return "Value and type set successfully: value=" + aiholoValue + ", type=" + aiholoType;
+        } catch (Exception e) {
+            System.err.println("Error decoding parameters: " + e.getMessage());
+            return "Error setting values: " + e.getMessage();
+        }
+    }
+
+    @GetMapping("/aiholo/get")
+    @ResponseBody
     public String getValue() {
-        return theValue;
+        // Return JSON format with both type and value
+        return "{\"type\":\"" + aiholoType + "\",\"value\":\"" + aiholoValue + "\"}";
     }
-    
-    @GetMapping("/setValue")
-    public String setValueViaGet(@RequestParam String newValue) {
-        theValue = newValue;
-        return "Value set to: " + theValue;
-    }
-    
+
     /**
-     * Public static method to set the value programmatically from other controllers
+     * Static method for programmatic access to set value (for redirect service)
      */
-    public static void setValue(String newValue) {
-        theValue = newValue;
-        System.out.println("GetSetController setValue called programmatically with: " + newValue);
+    public static void setValue(String value) {
+        aiholoValue = value;
+        aiholoType = "redirect";
+        System.out.println("Static setValue called with: " + value);    
     }
 }

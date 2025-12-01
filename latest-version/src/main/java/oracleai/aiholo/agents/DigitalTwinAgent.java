@@ -36,7 +36,7 @@ public class DigitalTwinAgent implements Agent {
 
     @Override
     public String getValueName() {
-        return "digitaltwinagent";
+        return "generalagent"; // Write same value as FinancialAgent for consistency
     }
 
     @Override

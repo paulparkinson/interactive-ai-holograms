@@ -20,8 +20,10 @@ import java.util.concurrent.ConcurrentMap;
  */
 public class TTSCoquiEnhanced {
     
-    // Python 3.11 executable path
-    private static final String PYTHON_311_PATH = "C:\\Users\\paulp\\AppData\\Local\\Programs\\Python\\Python311\\python.exe";
+    // Python 3.11 executable path - use environment variable or detect current user
+    private static final String PYTHON_311_PATH = System.getenv("PYTHON_PATH") != null ? 
+        System.getenv("PYTHON_PATH") : 
+        "C:\\Users\\" + System.getProperty("user.name") + "\\AppData\\Local\\Programs\\Python\\Python311\\python.exe";
     
     // TTS script path
     private static final String COQUI_TTS_SCRIPT = "coqui_tts_integration.py";

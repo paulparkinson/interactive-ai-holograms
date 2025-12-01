@@ -17,7 +17,7 @@ public class AIApplication {
     public static final String OCICONFIG_FILE = System.getenv("OCICONFIG_FILE");
     public static final String OCICONFIG_PROFILE = System.getenv("OCICONFIG_PROFILE");
     public static final String DIGITAL_DOUBLES_IMAGES_ENDPOINT = System.getenv("DIGITAL_DOUBLES_IMAGES_ENDPOINT");
-    public static final String THREEDEY = "msy_mykey";
+    public static final String THREEDEY = System.getenv("THREED_KEY");
 
     static {
         System.out.println("AIApplication.static initializer COMPARTMENT_ID:" + COMPARTMENT_ID);

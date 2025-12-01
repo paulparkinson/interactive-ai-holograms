@@ -75,8 +75,14 @@ public class AIHoloController {
     private static final AtomicBoolean AUDIO2FACE_ENABLED =
             new AtomicBoolean(Boolean.parseBoolean(System.getenv("IS_AUDIO2FACE")));
     private static final boolean REDIRECT_ANSWER = 
-            Boolean.parseBoolean(System.getenv().getOrDefault("REDIRECT_ANSWER", "true"));
+            Boolean.parseBoolean(System.getenv().getOrDefault("REDIRECT_ANSWER", "false"));
     private static int audioDelayMs = 500; // Default delay between dual audio outputs in milliseconds
+    private static boolean enableIntroAudio = false; // Set to false to disable random intro sounds
+    private static boolean enableDualAudioOutput = true; // Set to true to enable dual audio output
+    
+    // Configurable audio output devices
+    private static String audioDeviceA = "CABLE Input (VB-Audio Virtual Cable)"; // Java Stream A → Unreal
+    private static String audioDeviceB = "Speakers (VB-Audio Voicemeeter VAIO)"; // Java Stream B → Zoom
 
     // Agent registration system
     private static final List<Agent> registeredAgents = new ArrayList<>();
@@ -90,8 +96,10 @@ public class AIHoloController {
         registerAgent(new GamerAgent(OPENAI_KEY));
         // OptimizerToolkitAgent commented out - backend not working
         // registerAgent(new OptimizerToolkitAgent(SANDBOX_API_URL, AI_OPTIMZER));
-        // DirectLLMAgent is the default fallback (registered last, no keywords)
+        // DirectLLMAgent is the preferred fallback if OpenAI key is available
         registerAgent(new DirectLLMAgent(OPENAI_KEY));
+        // DefaultFallbackAgent is always available as final fallback
+        registerAgent(new DefaultFallbackAgent());
     }
 
     /**
@@ -152,7 +160,7 @@ public class AIHoloController {
         System.out.println("Audio2Face playback " + (enabled ? "enabled" : "disabled"));
     }
     
-    // TTS Engine Configuration
+    // TTS Engine Configuration - GCP is the default for reliability
     private static final String TTS_ENGINE = System.getenv("TTS_ENGINE") != null ? 
         System.getenv("TTS_ENGINE").toUpperCase() : "GCP";
     
@@ -206,7 +214,7 @@ public class AIHoloController {
 
         public static TTSSelection fallbackFor(TTSSelection selection) {
             if (selection == null) {
-                return COQUI_BALANCED;
+                return GCP;
             }
             switch (selection) {
                 case COQUI_FAST:
@@ -215,16 +223,17 @@ public class AIHoloController {
                 case COQUI_BALANCED:
                     return GCP;
                 case GCP:
-                    return COQUI_BALANCED;
+                    // If GCP fails, don't fall back to broken systems - return null to trigger error
+                    return null;
                 case OCI:
                     return GCP;
                 default:
-                    return COQUI_BALANCED;
+                    return GCP;
             }
         }
 
         public static TTSSelection defaultSelection() {
-            return COQUI_BALANCED;
+            return GCP;
         }
     }
     
@@ -310,32 +319,28 @@ public class AIHoloController {
     }
 
     public AIHoloController() {
-//        startInactivityMonitor();
-        // RemoteApiPoller.startPolling();
+        // Constructor - inactivity monitor and RemoteApiPoller have been disabled
     }
 
     @SuppressWarnings("unused")
     private void startInactivityMonitor() {
-        System.out.println("startInactivityMonitor...");
-        scheduler.scheduleAtFixedRate(() -> {
-            if (isRecentQuestionProcessed) {
-                System.out.println("isRecentQuestionProcessed true so skipping the timecheck/keepalive");
-                isRecentQuestionProcessed = false;
-            }
-//            String fileName = "currenttime.wav"; //testing123-brazil.wav
-//            TTSAndAudio2Face.processMetahuman(
-//                        fileName,  TimeInWords.getTimeInWords(languageCode),
-//                    DEFAULT_LANGUAGE_CODE, DEFAULT_VOICE_NAME);
-            if (isAudio2FaceEnabled()) {
-                TTSCoquiEnhanced.sendToAudio2Face("explainer.wav");
-            } else {
-                // Play audio to VB-Audio Virtual Cable (for Unreal Live Link Hub)
-                TTSCoquiEnhanced.playAudioFileToDevice("explainer.wav", "CABLE");
-                // Wait ~800ms then play to default speakers
-                try { Thread.sleep(audioDelayMs); } catch (InterruptedException e) { }
-                TTSCoquiEnhanced.playAudioFile("explainer.wav");
-            }
-        }, 1, 15, TimeUnit.MINUTES);
+        System.out.println("startInactivityMonitor DISABLED - no more 15-minute explainer audio");
+        // DISABLED: This was playing explainer audio every 15 minutes causing interruptions
+        // scheduler.scheduleAtFixedRate(() -> {
+        //     if (isRecentQuestionProcessed) {
+        //         System.out.println("isRecentQuestionProcessed true so skipping the timecheck/keepalive");
+        //         isRecentQuestionProcessed = false;
+        //     }
+        //     if (isAudio2FaceEnabled()) {
+        //         TTSCoquiEnhanced.sendToAudio2Face("explainer.wav");
+        //     } else {
+        //         TTSCoquiEnhanced.playAudioFileToDevice("explainer.wav", "CABLE");
+        //         if (enableDualAudioOutput) {
+        //             try { Thread.sleep(audioDelayMs); } catch (InterruptedException e) { }
+        //             TTSCoquiEnhanced.playAudioFile("explainer.wav");
+        //         }
+        //     }
+        // }, 1, 15, TimeUnit.MINUTES);
     }
 
 
@@ -347,16 +352,25 @@ public class AIHoloController {
         model.addAttribute("aiholoHostUrl", AIHOLO_HOST_URL != null ? AIHOLO_HOST_URL : "http://localhost:8080");
         String resolvedVoice = resolveFemaleVoice(languageCode);
         model.addAttribute("voiceName", resolvedVoice);
-        model.addAttribute("audio2FaceEnabled", isAudio2FaceEnabled());
+        
+        // Add dual audio configuration attributes
+        model.addAttribute("audioDelayMs", audioDelayMs);
+        model.addAttribute("enableDualAudioOutput", enableDualAudioOutput);
+        model.addAttribute("audioDeviceA", audioDeviceA);
+        model.addAttribute("audioDeviceB", audioDeviceB);
+        
         return "aiholo";
     }
 
 
     @GetMapping("/explainer")
     @ResponseBody
-    public String explainer() throws Exception {
-        System.out.println("AIHoloController.explainer");
-        theValue = "explainer";
+    public String explainer(@RequestParam(value = "enableDualAudio", required = false, defaultValue = "false") Boolean enableDualAudio,
+                           @RequestParam(value = "audioDeviceA", required = false, defaultValue = "CABLE Input (VB-Audio Virtual Cable)") String audioDeviceA,
+                           @RequestParam(value = "audioDeviceB", required = false, defaultValue = "Speakers (VB-Audio Voicemeeter VAIO)") String audioDeviceB,
+                           @RequestParam(value = "audioDelayMs", required = false, defaultValue = "500") Integer audioDelayMs) throws Exception {
+        System.out.println("AIHoloController.explainer - enableDualAudio: " + enableDualAudio + ", audioDelayMs: " + audioDelayMs);
+        theValue = "financialagent"; // Write same value as FinancialAgent for consistency
         String filePath = OUTPUT_FILE_PATH != null ? OUTPUT_FILE_PATH : "aiholo_output.txt";
         try (FileWriter writer = new FileWriter(filePath)) {
             JSONObject json = new JSONObject();
@@ -366,14 +380,17 @@ public class AIHoloController {
         } catch (IOException e) {
             return "Error writing to file: " + e.getMessage();
         }
-        if (isAudio2FaceEnabled()) {
-            TTSCoquiEnhanced.sendToAudio2Face("explainer.wav");
-        } else {
-            // Play audio for Unreal Live Link Hub source (first output)
-            TTSCoquiEnhanced.playAudioFileToDevice("explainer.wav", "CABLE");
-            // Wait ~800ms then play to local speaker (second output)
+        
+        // Direct audio playbook using passed parameters
+        System.out.println("EXPLAINER: Playing to Device A (" + audioDeviceA + "): explainer.wav");
+        TTSCoquiEnhanced.playAudioFileToDevice("explainer.wav", audioDeviceA);
+        if (enableDualAudio) {
+            System.out.println("EXPLAINER: Dual audio enabled - waiting " + audioDelayMs + "ms before playing to Device B (" + audioDeviceB + ")");
             try { Thread.sleep(audioDelayMs); } catch (InterruptedException e) { }
-            TTSCoquiEnhanced.playAudioFile("explainer.wav");
+            System.out.println("EXPLAINER: Now playing to Device B after " + audioDelayMs + "ms delay");
+            TTSCoquiEnhanced.playAudioFileToDevice("explainer.wav", audioDeviceB);
+        } else {
+            System.out.println("EXPLAINER: Dual audio disabled - only playing to Device A");
         }
 
         return "Explained";
@@ -407,8 +424,10 @@ public class AIHoloController {
                        @RequestParam("languageCode") String languageCode,
                        @RequestParam("voiceName") String voicename,
                        @RequestParam(value = "ttsMode", required = false) String ttsModeParam,
-                       @RequestParam(value = "audio2Face", required = false) Boolean audio2FaceParam,
-                       @RequestParam(value = "audioDelayMs", required = false, defaultValue = "500") Integer audioDelayMs) throws Exception {
+                       @RequestParam(value = "audioDelayMs", required = false, defaultValue = "500") Integer audioDelayMs,
+                       @RequestParam(value = "enableDualAudio", required = false) Boolean enableDualAudio,
+                       @RequestParam(value = "audioDeviceA", required = false) String audioDeviceAParam,
+                       @RequestParam(value = "audioDeviceB", required = false) String audioDeviceBParam) throws Exception {
         System.out.println(
                 "play question: " + question + " selectedMode: " + selectedMode +
                         " languageCode:" + languageCode + " voicename:" + voicename);
@@ -420,14 +439,29 @@ public class AIHoloController {
         voicename = resolvedVoiceName;
         TTSSelection ttsSelection = TTSSelection.fromParam(ttsModeParam);
         System.out.println("Requested TTS mode: " + ttsSelection.name());
-        if (audio2FaceParam != null) {
-            setAudio2FaceEnabled(audio2FaceParam);
-        }
+        
+        // Handle audio configuration parameters
         if (audioDelayMs != null) {
+            int previousDelay = AIHoloController.audioDelayMs;
             AIHoloController.audioDelayMs = audioDelayMs;
-            System.out.println("Audio delay set to: " + audioDelayMs + "ms");
+            System.out.println("Audio delay updated from parameter: " + audioDelayMs + "ms (was: " + previousDelay + "ms)");
         }
-        final boolean audio2FaceEnabled = isAudio2FaceEnabled();
+        if (enableDualAudio != null) {
+            AIHoloController.enableDualAudioOutput = enableDualAudio;
+            System.out.println("Dual audio output " + (enableDualAudio ? "enabled" : "disabled"));
+        } else {
+            System.out.println("Using existing dual audio setting: " + AIHoloController.enableDualAudioOutput);
+        }
+        if (audioDeviceAParam != null && !audioDeviceAParam.trim().isEmpty()) {
+            AIHoloController.audioDeviceA = audioDeviceAParam;
+            System.out.println("Audio Device A (Stream A → Unreal) set to: " + audioDeviceAParam);
+        }
+        if (audioDeviceBParam != null && !audioDeviceBParam.trim().isEmpty()) {
+            AIHoloController.audioDeviceB = audioDeviceBParam;
+            System.out.println("Audio Device B (Stream B → Zoom) set to: " + audioDeviceBParam);
+        }
+        
+        final boolean audio2FaceEnabled = false; // Audio2Face removed - always false
         theValue = "question";
         String filePath = OUTPUT_FILE_PATH != null ? OUTPUT_FILE_PATH : "aiholo_output.txt";
         try (FileWriter writer = new FileWriter(filePath)) {
@@ -446,8 +480,12 @@ public class AIHoloController {
             //     return "Triggered video agent";
             // }   
 
-        // Start a new thread to call TTSAndAudio2Face.sendToAudio2Face with intro switching
-        new Thread(() -> {
+        // DISABLED: Intro audio was causing overlapping audio loops  
+        // This thread was playing intro sounds that overlapped with main response audio
+        // Both intro and main response were playing to CABLE + speakers = 4 audio streams total
+        System.out.println("Intro audio disabled to prevent overlapping streams");
+        
+        /*
             try {
                 // languagecode:es-MX voicename:es-US-Wavenet-A
                 if (languageCode.equals("es-MX")) {
@@ -525,6 +563,7 @@ public class AIHoloController {
                 System.err.println("Error in sendToAudio2Face: " + e.getMessage());
             }
         }).start();
+        */
 
     String action = "chat";
     String answer;
@@ -552,24 +591,34 @@ public class AIHoloController {
             
             // Check if any registered agent can handle this question
             Agent matchingAgent = findAgentForQuestion(normalized);
+            System.out.println("Agent search for '" + normalized + "': " + 
+                (matchingAgent != null ? matchingAgent.getName() : "null"));
             
             long aiStartNs = System.nanoTime();
             if (matchingAgent != null) {
                 aiPipelineLabel = matchingAgent.getName();
                 // Write agent value name to output file
                 theValue = matchingAgent.getValueName();
+                System.out.println("AGENT MATCH: " + matchingAgent.getName() + " writing value: " + theValue + " to file");
                 try (FileWriter writer = new FileWriter(filePath)) {
                     JSONObject json = new JSONObject();
                     json.put("data", theValue);
                     writer.write(json.toString());
                     writer.flush();
+                    System.out.println("Successfully wrote agent value '" + theValue + "' to " + filePath);
                 } catch (IOException e) {
                     System.err.println("Error writing agent name to file: " + e.getMessage());
                 }
                 answer = matchingAgent.processQuestion(question);
             } else {
                 aiPipelineLabel = "executeSandbox";
-                answer = executeSandbox(question);
+                try {
+                    answer = executeSandbox(question);
+                } catch (Exception e) {
+                    System.err.println("External AI service unavailable, using fallback: " + e.getMessage());
+                    aiPipelineLabel = "fallback";
+                    answer = "I'm sorry, the external AI service is temporarily unavailable. Please try again later.";
+                }
             }
             aiDurationMillis = (System.nanoTime() - aiStartNs) / 1_000_000.0;
 
@@ -614,7 +663,12 @@ public class AIHoloController {
             if (REDIRECT_ANSWER) {
                 executeRedirect(answer, languageCode, voicename, aiPipelineLabel, aiDurationMillis, ttsSelection, audio2FaceEnabled);
             } else {
-                generateAndPlayTts(fileName, answer, languageCode, voicename, aiPipelineLabel, aiDurationMillis, ttsSelection, audio2FaceEnabled);
+                // Pass dual audio configuration parameters directly from the /play method parameters
+                boolean dualAudioEnabled = (enableDualAudio != null) ? enableDualAudio : AIHoloController.enableDualAudioOutput;
+                String deviceA = (audioDeviceAParam != null && !audioDeviceAParam.trim().isEmpty()) ? audioDeviceAParam : AIHoloController.audioDeviceA;
+                String deviceB = (audioDeviceBParam != null && !audioDeviceBParam.trim().isEmpty()) ? audioDeviceBParam : AIHoloController.audioDeviceB;
+                int delay = (audioDelayMs != null) ? audioDelayMs : AIHoloController.audioDelayMs;
+                generateAndPlayTts(fileName, answer, languageCode, voicename, aiPipelineLabel, aiDurationMillis, ttsSelection, audio2FaceEnabled, dualAudioEnabled, deviceA, deviceB, delay);
             }
         } catch (Exception e) {
             System.err.println("Requested TTS mode failed completely: " + e.getMessage());
@@ -983,7 +1037,8 @@ public class AIHoloController {
                 return "Error writing to file: " + e.getMessage();
             }
         generateAndPlayTts("output.wav", answer, languageCode, voicename,
-            "Manual playback", 0.0, ttsSelection, audio2FaceEnabled);
+            "Manual playback", 0.0, ttsSelection, audio2FaceEnabled, 
+            AIHoloController.enableDualAudioOutput, AIHoloController.audioDeviceA, AIHoloController.audioDeviceB, audioDelayMs);
             return "OK";
         } catch (Exception e) {
             e.printStackTrace();
@@ -1061,7 +1116,7 @@ public class AIHoloController {
 
     private void generateAndPlayTts(String fileName, String textToSay, String languageCode, String voiceName,
                                     String aiPipelineLabel, double aiDurationMillis, TTSSelection requestedMode,
-                                    boolean audio2FaceEnabled) throws Exception {
+                                    boolean audio2FaceEnabled, boolean enableDualAudio, String deviceA, String deviceB, int delayMs) throws Exception {
         String safeText = (textToSay == null || textToSay.isBlank()) ? " " : textToSay;
         TTSSelection currentSelection = (requestedMode != null) ? requestedMode : TTSSelection.defaultSelection();
         Exception lastError = null;
@@ -1079,14 +1134,17 @@ public class AIHoloController {
                                 ttsDurationMillis,
                                 true,
                                 currentSelection.getDisplayLabel()));
-                if (audio2FaceEnabled) {
-                    TTSCoquiEnhanced.sendToAudio2Face(fileName);
+                // Java Stream A → Unreal (CABLE device)
+                System.out.println("Playing audio to Device A (" + deviceA + "): " + fileName);
+                TTSCoquiEnhanced.playAudioFileToDevice(fileName, deviceA);
+                if (enableDualAudio) {
+                    // Wait for delay then play Java Stream B → Zoom (Voicemeeter VAIO)
+                    System.out.println("Dual audio enabled - waiting " + delayMs + "ms before playing to Device B (" + deviceB + ")");
+                    try { Thread.sleep(delayMs); } catch (InterruptedException e) { }
+                    System.out.println("Now playing to Device B after " + delayMs + "ms delay");
+                    TTSCoquiEnhanced.playAudioFileToDevice(fileName, deviceB);
                 } else {
-                    // Play audio for Unreal Live Link Hub source (first output)
-                    TTSCoquiEnhanced.playAudioFileToDevice(fileName, "CABLE");
-                    // Wait ~800ms then play to local speaker (second output)
-                    try { Thread.sleep(audioDelayMs); } catch (InterruptedException e) { }
-                    TTSCoquiEnhanced.playAudioFile(fileName);
+                    System.out.println("Dual audio disabled - only playing to Device A");
                 }
                 return;
             } catch (Exception error) {
@@ -1106,18 +1164,6 @@ public class AIHoloController {
         }
 
         throw lastError != null ? lastError : new RuntimeException("Unable to generate TTS audio");
-    }
-
-    /**
-     * Static wrapper for generateAndPlayTts to allow external classes (like RemoteApiPoller) to trigger TTS.
-     */
-    static void generateAndPlayTtsStatic(String fileName, String textToSay, String languageCode, String voiceName,
-                                         String aiPipelineLabel, double aiDurationMillis, TTSSelection requestedMode,
-                                         boolean audio2FaceEnabled) throws Exception {
-        // Create a temporary instance to call the instance method
-        // Note: This works because generateAndPlayTts doesn't depend on instance state
-        new AIHoloController().generateAndPlayTts(fileName, textToSay, languageCode, voiceName,
-                aiPipelineLabel, aiDurationMillis, requestedMode, audio2FaceEnabled);
     }
 
     private void executeTtsForSelection(String fileName, String textToSay, String languageCode,

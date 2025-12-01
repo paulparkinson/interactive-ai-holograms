@@ -22,7 +22,7 @@ public class MirrorMeAgent implements Agent {
 
     @Override
     public String getValueName() {
-        return "mirrorme";
+        return "mirrorme"; 
     }
 
     @Override

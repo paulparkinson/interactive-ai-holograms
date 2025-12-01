@@ -104,13 +104,23 @@
 <script th:inline="javascript">
     var languageCodeSTT = /*[[${languageCode} ?: 'pt-BR']]*/ 'pt-BR';
     var voiceName = /*[[${voiceName} ?: 'pt-BR-Wavenet-D']]*/ 'pt-BR-Wavenet-D';
+    // Default TTS mode - GCP is the primary, most reliable option
     var ttsMode = 'GCP';
     var audio2FaceEnabled = /*[[${audio2FaceEnabled} ?: false]]*/ false;
-    var audioDelayMs = 500; // Default delay between dual audio outputs in milliseconds
+    var audioDelayMs = /*[[${audioDelayMs} ?: 500]]*/ 500;
+    
+    // Dual audio configuration
+    var enableDualAudioOutput = /*[[${enableDualAudioOutput} ?: true]]*/ true;
+    var audioDeviceA = /*[[${audioDeviceA} ?: 'CABLE Input (VB-Audio Virtual Cable)']]*/ 'CABLE Input (VB-Audio Virtual Cable)';
+    var audioDeviceB = /*[[${audioDeviceB} ?: 'Speakers (VB-Audio Voicemeeter VAIO)']]*/ 'Speakers (VB-Audio Voicemeeter VAIO)';
+    
     console.log("Using Speech Recognition Language: " + languageCodeSTT + " and VoiceName: " + voiceName);
     console.log("Speech Recognition Language Code:", languageCodeSTT);
     console.log("Audio2Face enabled:", audio2FaceEnabled);
     console.log("Audio delay:", audioDelayMs + "ms");
+    console.log("Dual audio output:", enableDualAudioOutput);
+    console.log("Audio Device A (Stream A → Unreal):", audioDeviceA);
+    console.log("Audio Device B (Stream B → Zoom):", audioDeviceB);
 
     const voiceOptionsByLanguage = {
         "en-US": [
@@ -143,10 +153,10 @@
     };
 
     const ttsModeOptions = [
+        { value: 'GCP', label: 'Google Cloud TTS (default)' },
         { value: 'COQUI_FAST', label: 'Coqui - Fast (lower latency)' },
-        { value: 'COQUI_BALANCED', label: 'Coqui - Balanced (default)' },
+        { value: 'COQUI_BALANCED', label: 'Coqui - Balanced' },
         { value: 'COQUI_QUALITY', label: 'Coqui - Quality (highest fidelity)' },
-        { value: 'GCP', label: 'Google Cloud TTS' },
         { value: 'OCI', label: 'Oracle Cloud TTS (preview)' }
     ];
 
@@ -251,6 +261,36 @@
             console.log("Audio delay updated to", audioDelayMs + "ms");
         });
     }
+
+    function initDualAudioInputs() {
+        const dualAudioCheckbox = document.getElementById("enableDualAudioOutput");
+        const deviceAInput = document.getElementById("audioDeviceA");
+        const deviceBInput = document.getElementById("audioDeviceB");
+
+        if (dualAudioCheckbox) {
+            dualAudioCheckbox.checked = enableDualAudioOutput;
+            dualAudioCheckbox.addEventListener("change", (event) => {
+                enableDualAudioOutput = event.target.checked;
+                console.log("Dual audio output", enableDualAudioOutput ? "enabled" : "disabled");
+            });
+        }
+
+        if (deviceAInput) {
+            deviceAInput.value = audioDeviceA;
+            deviceAInput.addEventListener("change", (event) => {
+                audioDeviceA = event.target.value;
+                console.log("Audio Device A updated to:", audioDeviceA);
+            });
+        }
+
+        if (deviceBInput) {
+            deviceBInput.value = audioDeviceB;
+            deviceBInput.addEventListener("change", (event) => {
+                audioDeviceB = event.target.value;
+                console.log("Audio Device B updated to:", audioDeviceB);
+            });
+        }
+    }
 </script>
 
 <div class="container mt-3">
@@ -336,6 +376,24 @@
     <input type="number" id="audioDelayInput" min="0" max="5000" step="50" value="500" style="background: #2A2F2F; color: #F1EFED; border: 1px solid #444; border-radius: 4px; padding: 4px 6px; width: 80px;">
     <span style="font-size: 0.75rem; margin-left: 4px; color: #808080;">(delay between dual audio outputs)</span>
 </div>
+
+<!-- Dual Audio Configuration -->
+<div id="dualAudioConfig" style="margin-top: 12px; font-size: 0.8rem; color: #A0A0A0; text-align: right; border-top: 1px solid #444; padding-top: 8px;">
+    <div style="margin-bottom: 6px;">
+        <input type="checkbox" id="enableDualAudioOutput" th:checked="${enableDualAudioOutput}" style="margin-right: 6px;">
+        <label for="enableDualAudioOutput">Enable Dual Audio Output</label>
+    </div>
+    <div style="margin-bottom: 4px;">
+        <label for="audioDeviceA" style="margin-right: 6px;">Stream A → Unreal:</label>
+        <input type="text" id="audioDeviceA" th:value="${audioDeviceA}" placeholder="CABLE Input (VB-Audio Virtual Cable)" 
+               style="background: #2A2F2F; color: #F1EFED; border: 1px solid #444; border-radius: 4px; padding: 2px 4px; width: 250px; font-size: 0.75rem;">
+    </div>
+    <div>
+        <label for="audioDeviceB" style="margin-right: 6px;">Stream B → Zoom:</label>
+        <input type="text" id="audioDeviceB" th:value="${audioDeviceB}" placeholder="Speakers (VB-Audio Voicemeeter VAIO)" 
+               style="background: #2A2F2F; color: #F1EFED; border: 1px solid #444; border-radius: 4px; padding: 2px 4px; width: 250px; font-size: 0.75rem;">
+    </div>
+</div>
 <script>
     document.addEventListener("DOMContentLoaded", function () {
         console.log("Speech Recognition Language Code:", languageCodeSTT);
@@ -349,6 +407,7 @@
     initTtsDropdown();
     initAudio2FaceDropdown();
     initAudioDelayInput();
+    initDualAudioInputs();
         // Attach listeners to history toggle radio buttons
         const histOnRadio = document.getElementById("history-on");
         const histOffRadio = document.getElementById("history-off");
@@ -472,7 +531,7 @@
             if (audioDelayInput) {
                 audioDelayMs = parseInt(audioDelayInput.value, 10);
             }
-            const apiUrl = `[[${aiholoHostUrl}]]/aiholo/play?question=${encodeURIComponent(modifiedText)}&selectedMode=${encodeURIComponent(selectedMode)}&languageCode=${encodeURIComponent(languageCodeSTT)}&voiceName=${encodeURIComponent(voiceName)}&ttsMode=${encodeURIComponent(ttsMode)}&audio2Face=${encodeURIComponent(String(audio2FaceEnabled))}&audioDelayMs=${encodeURIComponent(audioDelayMs)}`;
+            const apiUrl = `[[${aiholoHostUrl}]]/aiholo/play?question=${encodeURIComponent(modifiedText)}&selectedMode=${encodeURIComponent(selectedMode)}&languageCode=${encodeURIComponent(languageCodeSTT)}&voiceName=${encodeURIComponent(voiceName)}&ttsMode=${encodeURIComponent(ttsMode)}&audioDelayMs=${encodeURIComponent(audioDelayMs)}&enableDualAudio=${encodeURIComponent(enableDualAudioOutput)}&audioDeviceA=${encodeURIComponent(audioDeviceA)}&audioDeviceB=${encodeURIComponent(audioDeviceB)}`;
 
 
             try {
@@ -514,7 +573,10 @@
 
         document.getElementById("explainerBtn").addEventListener("click", async () => {
             try {
-                const response = await fetch("[[${aiholoHostUrl}]]/aiholo/explainer", { method: "GET" });
+                // Include dual audio configuration parameters
+                const explainerUrl = `[[${aiholoHostUrl}]]/aiholo/explainer?enableDualAudio=${encodeURIComponent(enableDualAudioOutput)}&audioDeviceA=${encodeURIComponent(audioDeviceA)}&audioDeviceB=${encodeURIComponent(audioDeviceB)}&audioDelayMs=${encodeURIComponent(audioDelayMs)}`;
+                console.log("Calling explainer with URL:", explainerUrl);
+                const response = await fetch(explainerUrl, { method: "GET" });
                 if (response.ok) {
                     alert("✅ Explainer mode activated successfully!");
                 } else {

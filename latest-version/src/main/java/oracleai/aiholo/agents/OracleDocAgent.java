@@ -122,9 +122,21 @@ public class OracleDocAgent implements Agent {
             
             String answer = chatGPTService.queryChatGPT(ragPrompt, "gpt-4");
             
-            // Append source document names to the answer
-            String sources = getUniqueSourceNames(relevantDocs);
-            String finalAnswer = answer + "\n\nSources: " + sources;
+            // Only append sources if the answer actually used the documents
+            // Skip sources if ChatGPT says documents don't contain the information
+            String lowerAnswer = answer.toLowerCase();
+            boolean documentsUsed = !lowerAnswer.contains("do not contain") && 
+                                   !lowerAnswer.contains("don't contain") &&
+                                   !lowerAnswer.contains("does not contain") &&
+                                   !lowerAnswer.contains("doesn't contain") &&
+                                   !lowerAnswer.contains("no information");
+            
+            String finalAnswer = answer;
+            if (documentsUsed) {
+                // Only show the top (most relevant) source document
+                String topSource = getTopSourceName(relevantDocs);
+                finalAnswer = answer + "\n\nSource: " + topSource;
+            }
             
             System.out.println("Oracle Document Agent retrieved " + relevantDocs.size() + " relevant chunks (filtered from " + allDocs.size() + " total)");
             return finalAnswer;
@@ -285,14 +297,14 @@ public class OracleDocAgent implements Agent {
     }
     
     /**
-     * Extract unique document names from the list of chunks
+     * Get the top (most relevant) source document name
      */
-    private String getUniqueSourceNames(List<DocumentChunk> chunks) {
-        java.util.Set<String> uniqueNames = new java.util.LinkedHashSet<>();
-        for (DocumentChunk chunk : chunks) {
-            uniqueNames.add(chunk.name);
+    private String getTopSourceName(List<DocumentChunk> chunks) {
+        if (chunks.isEmpty()) {
+            return "Unknown";
         }
-        return String.join(", ", uniqueNames);
+        // Since chunks are already sorted by distance (closest first), return the first one's name
+        return chunks.get(0).name;
     }
     
     /**

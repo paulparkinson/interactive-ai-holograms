@@ -29,8 +29,12 @@ public class GetSetController {
         return simpleValue;
     }
 
-    @GetMapping("/aiholo/set")
-    @ResponseBody
+    // Removed @GetMapping("/aiholo/set") and @GetMapping("/aiholo/get") to avoid conflict with StatusController
+    // Use StatusController endpoints instead: /status/aiholo/set and /status/aiholo/get
+    
+    /**
+     * Set aiholo value (for backward compatibility - delegates to StatusController)
+     */
     public String setValue(@RequestParam("value") String value,
                           @RequestParam(value = "type", defaultValue = "default") String type) {
         try {
@@ -46,8 +50,9 @@ public class GetSetController {
         }
     }
 
-    @GetMapping("/aiholo/get")
-    @ResponseBody
+    /**
+     * Get aiholo value (for backward compatibility - delegates to StatusController)
+     */
     public String getValue() {
         // Return JSON format with both type and value
         return "{\"type\":\"" + aiholoType + "\",\"value\":\"" + aiholoValue + "\"}";

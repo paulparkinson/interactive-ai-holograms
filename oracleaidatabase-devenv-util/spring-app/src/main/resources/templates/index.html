@@ -1,0 +1,1056 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Oracle Vector Search</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        overflow: hidden;
+      }
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+      .header h1 {
+        font-size: 2em;
+        margin-bottom: 10px;
+      }
+      .header p {
+        opacity: 0.9;
+        font-size: 1.1em;
+      }
+      .content {
+        padding: 30px;
+      }
+      .section {
+        margin-bottom: 40px;
+        padding-bottom: 30px;
+        border-bottom: 2px solid #f0f0f0;
+      }
+      .section:last-child { border-bottom: none; }
+      .section h2 {
+        color: #667eea;
+        margin-bottom: 20px;
+        font-size: 1.5em;
+      }
+      .form-group {
+        margin-bottom: 15px;
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        color: #333;
+        font-weight: 500;
+      }
+      input[type="file"],
+      input[type="text"],
+      input[type="number"] {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #e0e0e0;
+        border-radius: 6px;
+        font-size: 1em;
+        transition: border-color 0.3s;
+      }
+      input[type="file"]:focus,
+      input[type="text"]:focus,
+      input[type="number"]:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+      .btn-group {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 6px;
+        font-size: 1em;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+        font-weight: 500;
+      }
+      button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      }
+      button:active {
+        transform: translateY(0);
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+      }
+      .results {
+        margin-top: 20px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 6px;
+        max-height: 500px;
+        overflow-y: auto;
+      }
+      .result-item {
+        background: white;
+        padding: 15px;
+        margin-bottom: 12px;
+        border-radius: 6px;
+        border-left: 4px solid #667eea;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+      .result-item:last-child { margin-bottom: 0; }
+      .result-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .result-name {
+        font-weight: 600;
+        color: #333;
+        font-size: 1.1em;
+      }
+      .result-score {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.9em;
+        font-weight: 600;
+      }
+      .result-id {
+        font-size: 0.85em;
+        color: #666;
+        font-family: monospace;
+        margin-bottom: 8px;
+      }
+      .result-text {
+        color: #555;
+        line-height: 1.5;
+        max-height: 100px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .message {
+        padding: 12px;
+        border-radius: 6px;
+        margin-top: 15px;
+      }
+      .success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+      .error {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+      .info {
+        background: #d1ecf1;
+        color: #0c5460;
+        border: 1px solid #bee5eb;
+      }
+      .search-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        padding: 10px;
+        background: white;
+        border-radius: 6px;
+        font-size: 0.9em;
+        color: #666;
+      }
+      .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 0.85em;
+        font-weight: 600;
+      }
+      .badge-oracle {
+        background: #e7f3ff;
+        color: #0066cc;
+      }
+      .badge-python {
+        background: #fff3cd;
+        color: #856404;
+      }
+      .spinner {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 3px solid rgba(255,255,255,0.3);
+        border-radius: 50%;
+        border-top-color: white;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      .doc-checkbox {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        margin-right: 12px;
+      }
+      .list-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+      }
+      .delete-controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .btn-delete {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        padding: 10px 20px;
+      }
+      .btn-delete:hover {
+        background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
+      }
+      .btn-delete:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .select-all-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.9em;
+        cursor: pointer;
+        color: #667eea;
+        font-weight: 500;
+      }
+      .rag-answer {
+        background: #f8f9fa;
+        border-left: 4px solid #667eea;
+        padding: 20px;
+        margin: 20px 0;
+        border-radius: 6px;
+        line-height: 1.6;
+      }
+      .rag-answer h3 {
+        color: #667eea;
+        margin-bottom: 15px;
+        font-size: 1.2em;
+      }
+      .rag-sources {
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 2px solid #e0e0e0;
+      }
+      .rag-sources h4 {
+        color: #555;
+        margin-bottom: 15px;
+        font-size: 1em;
+      }
+      .rag-source-item {
+        background: white;
+        padding: 12px;
+        margin-bottom: 10px;
+        border-radius: 6px;
+        border-left: 3px solid #28a745;
+      }
+      .rag-source-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .rag-source-name {
+        font-weight: 600;
+        color: #333;
+      }
+      .rag-source-score {
+        color: #28a745;
+        font-size: 0.9em;
+        font-weight: 600;
+      }
+      .rag-source-chunk {
+        color: #666;
+        font-size: 0.85em;
+      }
+      .rag-source-snippet {
+        color: #777;
+        font-size: 0.9em;
+        margin-top: 8px;
+        font-style: italic;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🔍 Oracle Vector Search and RAG</h1>
+        <p>Upload documents and search semantically using Oracle AI Database</p>
+      </div>
+      
+      <div class="content">
+        <!-- Upload Section -->
+        <div class="section">
+          <h2>📤 Upload Files To Be Embedded/Vectorized</h2>
+          <form id="uploadForm">
+            <div class="form-group">
+              <label for="fileInput">Select PDF, Image, etc. :</label>
+              <input type="file" id="fileInput" name="file" accept=".pdf,.png,.jpg,.jpeg,.gif" required />
+            </div>
+            <button type="submit" id="uploadBtn">Upload</button>
+          </form>
+          <div id="uploadMessage"></div>
+        </div>
+
+        <!-- Settings Section -->
+        <div class="section">
+          <h2>⚙️ Settings</h2>
+          
+          <!-- Database Selection -->
+          <div class="form-group">
+            <label style="font-weight: 600; margin-bottom: 12px; display: block;">Database Connection:</label>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <select id="databaseSelect" style="flex: 1; padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 1em;">
+                <option value="">Loading...</option>
+              </select>
+              <button id="switchDbBtn" style="padding: 10px 20px;">Switch</button>
+            </div>
+            <div id="currentDbInfo" style="margin-top: 8px; font-size: 0.9em; color: #666;"></div>
+          </div>
+          
+          <!-- Vector Search Mode -->
+          <div class="form-group" style="margin-top: 20px;">
+            <label style="font-weight: 600; margin-bottom: 12px; display: block;">Vector Embedding & Search Mode:</label>
+            <div style="margin-left: 10px;">
+              <label style="display: flex; align-items: center; cursor: pointer; margin-bottom: 10px;">
+                <input type="radio" name="vectorMode" value="oracle_native" id="useOracleNativeVectorSearch" style="width: auto; margin-right: 8px;" />
+                <span><strong>Oracle 26ai+ VECTOR_EMBEDDING()</strong> - Embeddings & search fully in-database using VECTOR_EMBEDDING() + VECTOR_DISTANCE()</span>
+              </label>
+              <label style="display: flex; align-items: center; cursor: pointer; margin-bottom: 10px;">
+                <input type="radio" name="vectorMode" value="oracle_hybrid" id="useOracleHybridVectorSearch" style="width: auto; margin-right: 8px;" />
+                <span><strong>Oracle 26ai+ Hybrid</strong> - Embeddings by Python ONNX, stored with TO_VECTOR(), searched with VECTOR_DISTANCE()</span>
+              </label>
+              <label style="display: flex; align-items: center; cursor: pointer;">
+                <input type="radio" name="vectorMode" value="python" id="usePythonVectorSearch" style="width: auto; margin-right: 8px;" />
+                <span><strong>Python NumPy Fallback</strong> - Embeddings by Python ONNX, stored as JSON, searched with Python cosine similarity</span>
+              </label>
+            </div>
+          </div>
+          
+          <div id="settingsMessage"></div>
+          
+          <!-- Current Mode Display -->
+          <div id="currentModeDisplay" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #667eea;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 1.2em;">🔧</span>
+              <div style="flex: 1;">
+                <div style="font-weight: 600; color: #333; margin-bottom: 4px;">Current Mode:</div>
+                <div id="currentModeText" style="color: #667eea; font-weight: 500;">Loading...</div>
+                <div id="currentModeDetails" style="font-size: 0.85em; color: #666; margin-top: 4px;"></div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- ONNX Model Setup Section -->
+          <div id="onnxSetupSection" style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107; display: none;">
+            <div style="display: flex; align-items: flex-start; gap: 10px;">
+              <span style="font-size: 1.2em;">⚠️</span>
+              <div style="flex: 1;">
+                <div style="font-weight: 600; color: #856404; margin-bottom: 8px;">Oracle Native Mode Setup Required</div>
+                <div style="font-size: 0.9em; color: #856404; margin-bottom: 10px;">
+                  To use <strong>oracle_native</strong> mode with VECTOR_EMBEDDING(), you need to import an ONNX model into the database.
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                  <button id="importOnnxBtn" style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%); padding: 10px 20px;">
+                    📥 Import ONNX Model to Database
+                  </button>
+                  <button id="checkOnnxBtn" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); padding: 10px 20px;">
+                    🔍 Check Model Status
+                  </button>
+                </div>
+                <div id="onnxSetupMessage" style="margin-top: 10px;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RAG Section -->
+        <div class="section">
+          <h2>💬 Ask Questions (Conduct RAG with Vector Search) </h2>
+          <p style="color: #666; margin-bottom: 15px; font-size: 0.95em;">
+            *Requires LLM to be specified in config/.env.
+          </p>
+          <form id="ragForm">
+            <div class="form-group">
+              <label for="ragQueryInput">Your question:</label>
+              <input type="text" id="ragQueryInput" name="q" placeholder="e.g., What are the specifications of the Oracle Roving Edge Device?" required />
+            </div>
+            <div class="form-group">
+              <label for="ragTopKInput">Number of sources to use:</label>
+              <input type="number" id="ragTopKInput" name="top_k" value="5" min="1" max="10" />
+            </div>
+            <button type="submit" id="ragBtn">Ask Question</button>
+          </form>
+          <div id="ragResults"></div>
+        </div>
+
+        <!-- Search Section -->
+        <div class="section">
+          <h2>🔎 Vector Search Documents, Images, etc.</h2>
+          <form id="searchForm">
+            <div class="form-group">
+              <label for="queryInput">Search query:</label>
+              <input type="text" id="queryInput" name="q" placeholder="e.g., database systems, machine learning..." required />
+            </div>
+            <div class="form-group">
+              <label for="topKInput">Number of results:</label>
+              <input type="number" id="topKInput" name="top_k" value="10" min="1" max="50" />
+            </div>
+            <button type="submit" id="searchBtn">Search</button>
+          </form>
+          <div id="searchResults"></div>
+        </div>
+
+        <!-- List Section -->
+        <div class="section">
+          <h2>📋 All Documents</h2>
+          <div class="list-header">
+            <button id="listBtn">Load All Documents</button>
+            <div class="delete-controls">
+              <label class="select-all-label">
+                <input type="checkbox" id="selectAllCheckbox" />
+                Select All
+              </label>
+              <button id="deleteBtn" class="btn-delete" disabled>Delete Selected</button>
+            </div>
+          </div>
+          <div id="listResults"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Load available databases
+      async function loadDatabases() {
+        try {
+          const response = await fetch('/databases');
+          const data = await response.json();
+          const select = document.getElementById('databaseSelect');
+          const infoDiv = document.getElementById('currentDbInfo');
+          
+          if (data.databases && data.databases.length > 0) {
+            select.innerHTML = '';
+            data.databases.forEach(db => {
+              const option = document.createElement('option');
+              option.value = db.name;
+              
+              // Format display based on connection type
+              if (db.wallet) {
+                option.textContent = `${db.name} (Wallet: ${db.service})`;
+              } else {
+                option.textContent = `${db.name} (${db.host}:${db.port}/${db.service})`;
+              }
+              
+              if (db.is_active) {
+                option.selected = true;
+                if (db.wallet) {
+                  infoDiv.innerHTML = `📊 Connected to: <strong>${db.name}</strong> - ${db.user}@${db.service} (Wallet)`;
+                } else {
+                  infoDiv.innerHTML = `📊 Connected to: <strong>${db.name}</strong> - ${db.user}@${db.host}:${db.port}/${db.service}`;
+                }
+              }
+              select.appendChild(option);
+            });
+          } else {
+            select.innerHTML = '<option value="default">default (oracle)</option>';
+            infoDiv.innerHTML = '📊 Connected to: <strong>default</strong> database';
+          }
+        } catch (error) {
+          console.error('Failed to load databases:', error);
+          document.getElementById('databaseSelect').innerHTML = '<option value="default">default (oracle)</option>';
+        }
+      }
+      loadDatabases();
+
+      // Switch database handler
+      document.getElementById('switchDbBtn').addEventListener('click', async () => {
+        const select = document.getElementById('databaseSelect');
+        const btn = document.getElementById('switchDbBtn');
+        const msg = document.getElementById('settingsMessage');
+        const dbName = select.value;
+        
+        if (!dbName) return;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Switching...';
+        msg.innerHTML = '';
+        
+        try {
+          const response = await fetch('/databases/switch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ database_name: dbName })
+          });
+          const data = await response.json();
+          
+          if (response.ok && data.success) {
+            msg.innerHTML = `<div class="message success">✓ ${data.message}</div>`;
+            loadDatabases(); // Refresh database list
+            setTimeout(() => msg.innerHTML = '', 3000);
+          } else {
+            msg.innerHTML = `<div class="message error">✗ ${data.error || 'Failed to switch database'}</div>`;
+          }
+        } catch (error) {
+          msg.innerHTML = `<div class="message error">✗ Error: ${error.message}</div>`;
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = 'Switch';
+        }
+      });
+
+      // Load current settings on page load
+      async function loadSettings() {
+        try {
+          const response = await fetch('/config');
+          const data = await response.json();
+          const mode = data.vector_mode || 'oracle_hybrid'; // Default to hybrid
+          
+          // Select the appropriate radio button
+          const radioButton = document.querySelector(`input[name="vectorMode"][value="${mode}"]`);
+          if (radioButton) {
+            radioButton.checked = true;
+          }
+          
+          // Update the visual display
+          updateModeDisplay(mode, data);
+        } catch (error) {
+          console.error('Failed to load settings:', error);
+        }
+      }
+      loadSettings();
+      
+      // Update the current mode display
+      function updateModeDisplay(mode, configData) {
+        const modeText = document.getElementById('currentModeText');
+        const modeDetails = document.getElementById('currentModeDetails');
+        const onnxSetupSection = document.getElementById('onnxSetupSection');
+        
+        const modeInfo = {
+          'oracle_native': {
+            name: 'Oracle 26ai+ VECTOR_EMBEDDING() - Fully Database-Side',
+            details: 'Embeddings generated by Oracle using VECTOR_EMBEDDING(), searched with VECTOR_DISTANCE()',
+            icon: '🎯'
+          },
+          'oracle_hybrid': {
+            name: 'Oracle 26ai+ Hybrid Mode',
+            details: 'Embeddings by Python ONNX (all-MiniLM-L6-v2), stored with TO_VECTOR(), searched with VECTOR_DISTANCE()',
+            icon: '⚡'
+          },
+          'python': {
+            name: 'Python NumPy (works in Oracle Database 19c)',
+            details: 'Embeddings by Python ONNX, stored as JSON CLOB, searched with Python cosine similarity',
+            icon: '🐍'
+          }
+        };
+        
+        const info = modeInfo[mode] || { name: mode, details: 'Unknown mode', icon: '❓' };
+        modeText.innerHTML = `${info.icon} ${info.name}`;
+        modeDetails.textContent = info.details;
+        
+        // Show ONNX setup section if oracle_native mode is selected
+        if (mode === 'oracle_native') {
+          onnxSetupSection.style.display = 'block';
+          checkOnnxModelStatus(); // Auto-check status when oracle_native is selected
+        } else {
+          onnxSetupSection.style.display = 'none';
+        }
+        
+        // Add model info if available
+        if (configData) {
+          const modelInfo = [];
+          if (configData.text_model) modelInfo.push(`Text: ${configData.text_model}`);
+          if (configData.image_model) modelInfo.push(`Image: ${configData.image_model}`);
+          if (modelInfo.length > 0) {
+            modeDetails.textContent += ` • Models: ${modelInfo.join(', ')}`;
+          }
+        }
+      }
+      
+      // Check ONNX model status
+      async function checkOnnxModelStatus() {
+        const msg = document.getElementById('onnxSetupMessage');
+        msg.innerHTML = '<div class="message info">Checking model status...</div>';
+        
+        try {
+          const response = await fetch('/setup/check-onnx-model');
+          const data = await response.json();
+          
+          if (data.success) {
+            if (data.can_use_oracle_native) {
+              msg.innerHTML = `
+                <div class="message success">
+                  ✓ ONNX models imported: ${data.models_imported}<br>
+                  Oracle version: ${data.oracle_version}<br>
+                  VECTOR_EMBEDDING() is ready to use!
+                  ${data.models.length > 0 ? '<br>Models: ' + data.models.map(m => m.name).join(', ') : ''}
+                </div>
+              `;
+            } else if (data.models_imported === 0) {
+              msg.innerHTML = `
+                <div class="message error">
+                  ✗ No ONNX models found in database.<br>
+                  Oracle version: ${data.oracle_version}<br>
+                  Click "Import ONNX Model" to set up VECTOR_EMBEDDING().
+                </div>
+              `;
+            } else {
+              msg.innerHTML = `
+                <div class="message error">
+                  ✗ Oracle version ${data.oracle_version} does not support VECTOR_EMBEDDING().<br>
+                  Requires Oracle 26ai or later. Use oracle_hybrid mode instead.
+                </div>
+              `;
+            }
+          } else {
+            msg.innerHTML = `<div class="message error">✗ ${data.error}</div>`;
+          }
+        } catch (error) {
+          msg.innerHTML = `<div class="message error">✗ Error: ${error.message}</div>`;
+        }
+      }
+      
+      // Import ONNX model handler
+      document.getElementById('importOnnxBtn').addEventListener('click', async () => {
+        const btn = document.getElementById('importOnnxBtn');
+        const msg = document.getElementById('onnxSetupMessage');
+        
+        if (!confirm('This will download and import the all-MiniLM-L12-v2 ONNX model (~120MB) into the Oracle database. This may take several minutes. Continue?')) {
+          return;
+        }
+        
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Importing ONNX Model...';
+        msg.innerHTML = '<div class="message info">⏳ Downloading and importing model from Hugging Face... This may take 2-5 minutes depending on network speed.</div>';
+        
+        try {
+          const response = await fetch('/setup/import-onnx-model', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model_name: 'all_MiniLM_L12_v2',
+              // Use Oracle's pre-augmented ONNX model zip download
+              model_url: 'https://adwc4pm.objectstorage.us-ashburn-1.oci.customer-oci.com/p/VBRD9P8ZFWkKvnfhrWxkpPe8K03-JIoM5h_8EJyJcpE80c108fuUjg7R5L5O7mMZ/n/adwc4pm/b/OML-Resources/o/all_MiniLM_L12_v2_augmented.zip',
+              force_reimport: false
+            })
+          });
+          const data = await response.json();
+          
+          if (data.success) {
+            msg.innerHTML = `
+              <div class="message success">
+                ✓ ${data.message}<br>
+                Model: ${data.model_name}<br>
+                Function: ${data.mining_function}<br>
+                Embedding Dimension: ${data.embedding_dimension}<br>
+                <br>
+                <strong>Oracle Native mode is now ready!</strong><br>
+                Test query: <code style="font-size: 0.85em; background: #f8f9fa; padding: 2px 6px; border-radius: 3px;">${data.test_query}</code>
+              </div>
+            `;
+          } else {
+            let errorHtml = `<div class="message error">✗ ${data.error}`;
+            if (data.solution) {
+              errorHtml += `<br><br><strong>Solution:</strong><br><code style="font-size: 0.85em; background: #f8f9fa; padding: 8px; border-radius: 3px; display: block; margin-top: 8px;">${data.solution}</code>`;
+            }
+            if (data.details) {
+              errorHtml += `<br><br><small>Details: ${data.details}</small>`;
+            }
+            errorHtml += '</div>';
+            msg.innerHTML = errorHtml;
+          }
+        } catch (error) {
+          msg.innerHTML = `<div class="message error">✗ Import failed: ${error.message}</div>`;
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '📥 Import ONNX Model to Database';
+        }
+      });
+      
+      // Check ONNX model status handler
+      document.getElementById('checkOnnxBtn').addEventListener('click', checkOnnxModelStatus);
+
+      // Settings change handler for all radio buttons
+      function setupVectorModeHandlers() {
+        const radios = document.querySelectorAll('input[name="vectorMode"]');
+        radios.forEach(radio => {
+          radio.addEventListener('change', async (e) => {
+            const mode = e.target.value;
+            const msg = document.getElementById('settingsMessage');
+            
+            const modeNames = {
+              'oracle_native': 'Oracle 26ai+ VECTOR_EMBEDDING() (fully database-side)',
+              'oracle_hybrid': 'Oracle 26ai+ Hybrid (Python ONNX + TO_VECTOR)',
+              'python': 'Python NumPy Fallback'
+            };
+            
+            try {
+              const response = await fetch('/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ vector_mode: mode })
+              });
+              const data = await response.json();
+              
+              if (response.ok) {
+                const modeName = modeNames[data.vector_mode] || data.vector_mode;
+                msg.innerHTML = `<div class="message success">✓ Mode updated to: ${modeName}</div>`;
+                setTimeout(() => msg.innerHTML = '', 3000);
+                
+                // Update the visual display
+                updateModeDisplay(data.vector_mode, data);
+              } else {
+                msg.innerHTML = `<div class="message error">✗ Failed to update settings</div>`;
+                loadSettings(); // Revert to previous state
+              }
+            } catch (error) {
+              msg.innerHTML = `<div class="message error">✗ Error: ${error.message}</div>`;
+              loadSettings(); // Revert to previous state
+            }
+          });
+        });
+      }
+      setupVectorModeHandlers();
+
+      // Upload form
+      document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('uploadBtn');
+        const msg = document.getElementById('uploadMessage');
+        const fileInput = document.getElementById('fileInput');
+        
+        if (!fileInput.files.length) {
+          msg.innerHTML = '<div class="message error">Please select a file</div>';
+          return;
+        }
+        
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Uploading...';
+        msg.innerHTML = '';
+        
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        
+        try {
+          const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+          });
+          const data = await response.json();
+          
+          if (response.ok) {
+            msg.innerHTML = `<div class="message success">✓ Uploaded successfully!<br>ID: ${data.id}<br>Vector dimension: ${data.vector_dim}</div>`;
+            fileInput.value = '';
+          } else {
+            msg.innerHTML = `<div class="message error">✗ Upload failed: ${data.error || 'Unknown error'}</div>`;
+          }
+        } catch (error) {
+          msg.innerHTML = `<div class="message error">✗ Upload failed: ${error.message}</div>`;
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = 'Upload';
+        }
+      });
+
+      // Search form
+      document.getElementById('searchForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('searchBtn');
+        const results = document.getElementById('searchResults');
+        const query = document.getElementById('queryInput').value;
+        const topK = document.getElementById('topKInput').value;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Searching...';
+        results.innerHTML = '';
+        
+        const formData = new FormData();
+        formData.append('q', query);
+        formData.append('top_k', topK);
+        
+        try {
+          const response = await fetch('/search', {
+            method: 'POST',
+            body: formData
+          });
+          const data = await response.json();
+          
+          if (response.ok && data.results) {
+            const mode = data.mode || 'unknown';
+            const modeBadge = mode === 'oracle_vector' 
+              ? '<span class="badge badge-oracle">Oracle VECTOR_DISTANCE()</span>'
+              : '<span class="badge badge-python">Python NumPy</span>';
+            
+            let html = `<div class="results">`;
+            html += `<div class="search-meta">`;
+            html += `<span><strong>Query:</strong> "${data.query}"</span>`;
+            html += `<span>${modeBadge}</span>`;
+            html += `</div>`;
+            
+            if (data.results.length === 0) {
+              html += '<div class="message info">No results found</div>';
+            } else {
+              data.results.forEach(item => {
+                html += `<div class="result-item">`;
+                html += `<div class="result-header">`;
+                html += `<span class="result-name">${item.name || 'Untitled'}</span>`;
+                html += `<span class="result-score">Score: ${(item.score || 0).toFixed(3)}</span>`;
+                html += `</div>`;
+                html += `<div class="result-id">ID: ${item.id}</div>`;
+                if (item.text) {
+                  const preview = item.text.length > 200 
+                    ? item.text.substring(0, 200) + '...' 
+                    : item.text;
+                  html += `<div class="result-text">${escapeHtml(preview)}</div>`;
+                }
+                html += `</div>`;
+              });
+            }
+            html += `</div>`;
+            results.innerHTML = html;
+          } else {
+            results.innerHTML = `<div class="message error">✗ Search failed: ${data.error || 'Unknown error'}</div>`;
+          }
+        } catch (error) {
+          results.innerHTML = `<div class="message error">✗ Search failed: ${error.message}</div>`;
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = 'Search';
+        }
+      });
+
+      // RAG form handler
+      document.getElementById('ragForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('ragBtn');
+        const results = document.getElementById('ragResults');
+        const query = document.getElementById('ragQueryInput').value;
+        const topK = document.getElementById('ragTopKInput').value;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Generating Answer...';
+        results.innerHTML = '';
+        
+        const formData = new FormData();
+        formData.append('q', query);
+        formData.append('top_k', topK);
+        
+        try {
+          const response = await fetch('/rag', {
+            method: 'POST',
+            body: formData
+          });
+          const data = await response.json();
+          
+          if (response.ok && data.answer) {
+            let html = '<div class="rag-answer">';
+            html += '<h3>Answer</h3>';
+            html += `<div>${escapeHtml(data.answer).replace(/\n/g, '<br>')}</div>`;
+            
+            if (data.sources && data.sources.length > 0) {
+              html += '<div class="rag-sources">';
+              html += '<h4>📚 Sources Used:</h4>';
+              data.sources.forEach(source => {
+                html += '<div class="rag-source-item">';
+                html += '<div class="rag-source-header">';
+                html += `<span class="rag-source-name">${source.name || 'Untitled'}</span>`;
+                html += `<span class="rag-source-score">Relevance: ${(source.score || 0).toFixed(3)}</span>`;
+                html += '</div>';
+                if (source.chunk_index !== undefined) {
+                  html += `<div class="rag-source-chunk">Chunk ${source.chunk_index}</div>`;
+                }
+                if (source.snippet) {
+                  html += `<div class="rag-source-snippet">"${escapeHtml(source.snippet)}"</div>`;
+                }
+                html += '</div>';
+              });
+              html += '</div>';
+            }
+            
+            html += '</div>';
+            results.innerHTML = html;
+          } else {
+            results.innerHTML = `<div class="message error">✗ ${data.error || 'Failed to generate answer'}</div>`;
+          }
+        } catch (error) {
+          results.innerHTML = `<div class="message error">✗ Failed to generate answer: ${error.message}</div>`;
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = 'Ask Question';
+        }
+      });
+
+      // List all documents
+      document.getElementById('listBtn').addEventListener('click', async () => {
+        const btn = document.getElementById('listBtn');
+        const results = document.getElementById('listResults');
+        const deleteBtn = document.getElementById('deleteBtn');
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Loading...';
+        results.innerHTML = '';
+        deleteBtn.disabled = true;
+        selectAllCheckbox.checked = false;
+        
+        try {
+          const response = await fetch('/list');
+          const data = await response.json();
+          
+          if (response.ok && data.documents) {
+            let html = `<div class="results">`;
+            html += `<div class="search-meta">`;
+            html += `<span><strong>Total documents:</strong> ${data.documents.length}</span>`;
+            html += `</div>`;
+            
+            if (data.documents.length === 0) {
+              html += '<div class="message info">No documents found</div>';
+            } else {
+              data.documents.forEach(item => {
+                html += `<div class="result-item">`;
+                html += `<div class="result-header">`;
+                html += `<label style="display: flex; align-items: center; flex: 1; cursor: pointer;">`;
+                html += `<input type="checkbox" class="doc-checkbox" data-doc-id="${item.id}" />`;
+                html += `<span class="result-name">${item.name || 'Untitled'}</span>`;
+                html += `</label>`;
+                if (item.chunks) {
+                  html += `<span class="badge badge-oracle">${item.chunks} chunks</span>`;
+                }
+                html += `</div>`;
+                html += `<div class="result-id">ID: ${item.id}</div>`;
+                if (item.text) {
+                  const preview = item.text.length > 200 
+                    ? item.text.substring(0, 200) + '...' 
+                    : item.text;
+                  html += `<div class="result-text">${escapeHtml(preview)}</div>`;
+                }
+                html += `</div>`;
+              });
+              
+              // Add event listeners for checkboxes
+              setTimeout(() => {
+                document.querySelectorAll('.doc-checkbox').forEach(checkbox => {
+                  checkbox.addEventListener('change', updateDeleteButton);
+                });
+              }, 0);
+            }
+            html += `</div>`;
+            results.innerHTML = html;
+          } else {
+            results.innerHTML = `<div class="message error">✗ Failed to load documents: ${data.error || 'Unknown error'}</div>`;
+          }
+        } catch (error) {
+          results.innerHTML = `<div class="message error">✗ Failed to load documents: ${error.message}</div>`;
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = 'Load All Documents';
+        }
+      });
+
+      // Select all checkbox
+      document.getElementById('selectAllCheckbox').addEventListener('change', (e) => {
+        const checkboxes = document.querySelectorAll('.doc-checkbox');
+        checkboxes.forEach(cb => cb.checked = e.target.checked);
+        updateDeleteButton();
+      });
+
+      // Update delete button state
+      function updateDeleteButton() {
+        const deleteBtn = document.getElementById('deleteBtn');
+        const checkboxes = document.querySelectorAll('.doc-checkbox:checked');
+        deleteBtn.disabled = checkboxes.length === 0;
+        deleteBtn.innerHTML = checkboxes.length > 0 
+          ? `🗑️ Delete Selected (${checkboxes.length})` 
+          : '🗑️ Delete Selected';
+      }
+
+      // Delete selected documents
+      document.getElementById('deleteBtn').addEventListener('click', async () => {
+        const checkboxes = document.querySelectorAll('.doc-checkbox:checked');
+        const docIds = Array.from(checkboxes).map(cb => cb.dataset.docId);
+        
+        if (docIds.length === 0) return;
+        
+        if (!confirm(`Are you sure you want to delete ${docIds.length} document(s)?`)) {
+          return;
+        }
+        
+        const deleteBtn = document.getElementById('deleteBtn');
+        const listResults = document.getElementById('listResults');
+        
+        deleteBtn.disabled = true;
+        deleteBtn.innerHTML = '<span class="spinner"></span> Deleting...';
+        
+        try {
+          // Process deletions in parallel for better performance
+          const deletePromises = docIds.map(docId => 
+            fetch(`/delete/${docId}`, { method: 'DELETE' })
+              .then(response => ({ success: response.ok, docId }))
+              .catch(error => ({ success: false, docId, error: error.message }))
+          );
+          
+          const results = await Promise.all(deletePromises);
+          const successCount = results.filter(r => r.success).length;
+          const failCount = results.filter(r => !r.success).length;
+          
+          // Show result message
+          let message = '';
+          if (successCount > 0) {
+            message += `<div class="message success">✓ Deleted ${successCount} document(s)</div>`;
+          }
+          if (failCount > 0) {
+            message += `<div class="message error">✗ Failed to delete ${failCount} document(s)</div>`;
+          }
+          
+          const resultsDiv = document.createElement('div');
+          resultsDiv.innerHTML = message;
+          listResults.insertBefore(resultsDiv, listResults.firstChild);
+          
+          // Reload the list
+          document.getElementById('listBtn').click();
+        } catch (error) {
+          console.error('Delete error:', error);
+        } finally {
+          // Always reset button state after operation completes
+          deleteBtn.disabled = true;
+          deleteBtn.innerHTML = '🗑️ Delete Selected';
+        }
+      });
+
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+    </script>
+  </body>
+</html>

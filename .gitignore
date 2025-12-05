@@ -67,6 +67,9 @@ venv/
 .env
 .venv
 
+# ONNX models (downloaded by scripts)
+*.onnx
+
 # Backup files
 *.bak
 *.backup

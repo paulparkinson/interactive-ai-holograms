@@ -237,7 +237,7 @@ public class AIHoloController {
         COQUI       // Coqui TTS (high-quality offline neural TTS)
     }
 
-    enum TTSSelection {
+    public enum TTSSelection {
         COQUI_FAST("Coqui Fast (lower latency)", TTSEngine.COQUI, TTSCoquiEnhanced.TTSQuality.FAST),
         COQUI_BALANCED("Coqui Balanced", TTSEngine.COQUI, TTSCoquiEnhanced.TTSQuality.BALANCED),
         COQUI_QUALITY("Coqui Quality", TTSEngine.COQUI, TTSCoquiEnhanced.TTSQuality.QUALITY),
@@ -376,7 +376,7 @@ public class AIHoloController {
             Map.entry("GA-IE", "ga-GA-Wavenet-A")
     );
 
-    static String resolveFemaleVoice(String languageCode) {
+    public static String resolveFemaleVoice(String languageCode) {
         String normalized = languageCode == null ? "" : languageCode.trim().toUpperCase(Locale.ROOT);
         if (normalized.isEmpty()) {
             return DEFAULT_FEMALE_VOICE;
@@ -1242,6 +1242,19 @@ public class AIHoloController {
         }
 
         throw lastError != null ? lastError : new RuntimeException("Unable to generate TTS audio");
+    }
+
+    /**
+     * Static wrapper for generateAndPlayTts to enable remote API polling functionality.
+     * Creates a temporary controller instance to execute TTS generation.
+     */
+    public static void generateAndPlayTtsStatic(String fileName, String textToSay, String languageCode,
+                                                String voiceName, String aiPipelineLabel, double aiDurationMillis,
+                                                TTSSelection requestedMode, boolean audio2FaceEnabled) throws Exception {
+        AIHoloController tempController = new AIHoloController();
+        tempController.generateAndPlayTts(fileName, textToSay, languageCode, voiceName, aiPipelineLabel,
+                                          aiDurationMillis, requestedMode, audio2FaceEnabled, 
+                                          false, null, null, 0);
     }
 
     private void executeTtsForSelection(String fileName, String textToSay, String languageCode,

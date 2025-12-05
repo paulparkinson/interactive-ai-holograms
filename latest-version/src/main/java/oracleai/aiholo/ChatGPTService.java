@@ -20,9 +20,13 @@ public class ChatGPTService {
      * Send a query directly to ChatGPT and return the response
      * 
      * @param question The user's question
+     * @param model The model to use (e.g., "gpt-4", "gpt-4o", "gpt-3.5-turbo")
      * @return ChatGPT's response text
      */
-    public String queryChatGPT(String question) {
+    public String queryChatGPT(String question, String model) {
+        if (model == null || model.isEmpty()) {
+            model = DEFAULT_MODEL;
+        }
         if (OPENAI_API_KEY == null || OPENAI_API_KEY.isEmpty()) {
             System.err.println("OPENAI_API_KEY environment variable not set");
             return "ChatGPT service is not configured. Please set OPENAI_API_KEY environment variable.";
@@ -33,7 +37,7 @@ public class ChatGPTService {
             
             // Build the request body
             JSONObject requestBody = new JSONObject();
-            requestBody.put("model", DEFAULT_MODEL);
+            requestBody.put("model", model);
             
             JSONArray messages = new JSONArray();
             JSONObject userMessage = new JSONObject();
@@ -53,7 +57,7 @@ public class ChatGPTService {
             HttpEntity<String> entity = new HttpEntity<>(requestBody.toString(), headers);
             
             // Make the API call
-            System.out.println("Calling ChatGPT API with model: " + DEFAULT_MODEL);
+            System.out.println("Calling ChatGPT API with model: " + model);
             ResponseEntity<String> response = restTemplate.exchange(
                 OPENAI_API_URL,
                 HttpMethod.POST,

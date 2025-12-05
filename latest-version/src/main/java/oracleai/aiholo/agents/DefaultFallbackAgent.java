@@ -44,8 +44,8 @@ public class DefaultFallbackAgent implements Agent {
         // Add instruction to keep responses concise
         String enhancedQuestion = question + " (Please respond in 25 words or less)";
         
-        // Use ChatGPT for intelligent responses
-        String response = chatGPTService.queryChatGPT(enhancedQuestion);
+        // Use ChatGPT for intelligent responses (use default model)
+        String response = chatGPTService.queryChatGPT(enhancedQuestion, "gpt-4");
         
         // Fallback to simple response if ChatGPT fails
         if (response == null || response.contains("error") || response.contains("not configured")) {

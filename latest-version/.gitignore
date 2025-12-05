@@ -2,6 +2,20 @@
 build_and_run.ps1
 src/main/resources/static/audio-aiholo/output.wav
 
+# SSL/TLS Certificates and Keys (SECURITY: Never commit these!)
+ssl/
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.csr
+set-ssl-env.ps1
+run-with-ssl.ps1
+
+# Application configuration (local overrides - use application_template.yaml as base)
+src/main/resources/application.yaml
+
 # Temporary Builds
 grabdish/inventory-micronaut/build/
 

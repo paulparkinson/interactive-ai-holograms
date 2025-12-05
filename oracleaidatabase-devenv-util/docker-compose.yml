@@ -1,0 +1,59 @@
+services:
+  oracle:
+    image: container-registry.oracle.com/database/free:latest
+    container_name: oracle-free
+    restart: unless-stopped
+    ports:
+      - "1521:1521"
+    environment:
+      - ORACLE_PWD=${ORACLE_PWD}
+    volumes:
+      - ${ORACLE_DATA_DIR}:/opt/oracle/oradata
+    deploy:
+      resources:
+        limits:
+          cpus: '8.0'
+          memory: 64G
+
+  python-app:
+    build: ./python-app
+    container_name: python-app
+    restart: unless-stopped
+    depends_on:
+      oracle:
+        condition: service_healthy
+    environment:
+      - ORACLE_HOST=oracle
+      - ORACLE_PORT=1521
+      - ORACLE_SERVICE=${ORACLE_SERVICE}
+      - ORACLE_USER=${ORACLE_USER}
+      - ORACLE_PWD=${ORACLE_PWD}
+      - MODEL_PATH_TEXT=/models/text_model.onnx
+      - MODEL_PATH_IMAGE=/models/image_model.onnx
+      - USE_ORACLE_VECTOR_SEARCH=${USE_ORACLE_VECTOR_SEARCH:-true}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      # Additional database connections
+      - DB_PROD_WALLET_DIR=${DB_PROD_WALLET_DIR:-}
+      - DB_PROD_WALLET_SERVICE=${DB_PROD_WALLET_SERVICE:-}
+      - DB_PROD_USER=${DB_PROD_USER:-}
+      - DB_PROD_PWD=${DB_PROD_PWD:-}
+    volumes:
+      - ./models:/models
+      - /home/paul/Downloads/Wallet_aiholodb:/wallet:ro
+    ports:
+      - "8001:8001"
+
+  spring-app:
+    build: ./spring-app
+    container_name: spring-app
+    restart: unless-stopped
+    depends_on:
+      python-app:
+        condition: service_started
+    environment:
+      - VECTOR_WORKER_URL=http://python-app:8001
+      - SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE=100MB
+      - SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE=100MB
+    ports:
+      - "8080:8080"

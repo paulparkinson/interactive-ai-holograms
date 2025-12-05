@@ -20,8 +20,10 @@ import java.util.concurrent.ConcurrentMap;
  */
 public class TTSCoquiEnhanced {
     
-    // Python 3.11 executable path
-    private static final String PYTHON_311_PATH = "C:\\Users\\paulp\\AppData\\Local\\Programs\\Python\\Python311\\python.exe";
+    // Python 3.11 executable path - use environment variable or detect current user
+    private static final String PYTHON_311_PATH = System.getenv("PYTHON_PATH") != null ? 
+        System.getenv("PYTHON_PATH") : 
+        "C:\\Users\\" + System.getProperty("user.name") + "\\AppData\\Local\\Programs\\Python\\Python311\\python.exe";
     
     // TTS script path
     private static final String COQUI_TTS_SCRIPT = "coqui_tts_integration.py";
@@ -400,5 +402,71 @@ public class TTSCoquiEnhanced {
             System.err.println("Coqui TTS test failed: " + e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * List all available audio output devices (for troubleshooting)
+     */
+    public static void listAudioDevices() {
+        System.out.println("\n=== Available Audio Output Devices ===");
+        javax.sound.sampled.Mixer.Info[] mixers = javax.sound.sampled.AudioSystem.getMixerInfo();
+        for (int i = 0; i < mixers.length; i++) {
+            javax.sound.sampled.Mixer mixer = javax.sound.sampled.AudioSystem.getMixer(mixers[i]);
+            javax.sound.sampled.Line.Info[] targetLines = mixer.getTargetLineInfo();
+            if (targetLines.length > 0) {
+                System.out.println(i + ": " + mixers[i].getName() + " - " + mixers[i].getDescription());
+            }
+        }
+        System.out.println("=====================================\n");
+    }
+
+    /**
+     * Play audio file to a specific output device (for Virtual Cable routing to Unreal)
+     */
+    public static void playAudioFileToDevice(String filename, String deviceName) {
+        new Thread(() -> {
+            try {
+                String fullPath = java.nio.file.Paths.get(AIHoloController.AUDIO_DIR_PATH, filename).toString();
+                java.io.File audioFile = new java.io.File(fullPath);
+                if (!audioFile.exists()) { System.err.println("Audio file not found: " + fullPath); return; }
+                System.out.println("Playing audio to device containing '" + deviceName + "': " + fullPath);
+                javax.sound.sampled.Mixer.Info[] mixers = javax.sound.sampled.AudioSystem.getMixerInfo();
+                javax.sound.sampled.Mixer targetMixer = null;
+                for (javax.sound.sampled.Mixer.Info mixerInfo : mixers) {
+                    if (mixerInfo.getName().toLowerCase().contains(deviceName.toLowerCase())) {
+                        javax.sound.sampled.Mixer mixer = javax.sound.sampled.AudioSystem.getMixer(mixerInfo);
+                        // Check if this mixer supports Clip as a source line (output)
+                        javax.sound.sampled.Line.Info[] sourceLines = mixer.getSourceLineInfo();
+                        boolean supportsClip = false;
+                        for (javax.sound.sampled.Line.Info lineInfo : sourceLines) {
+                            if (lineInfo.getLineClass().equals(javax.sound.sampled.Clip.class)) {
+                                supportsClip = true;
+                                break;
+                            }
+                        }
+                        if (supportsClip) {
+                            targetMixer = mixer;
+                            System.out.println("Using audio device: " + mixerInfo.getName());
+                            break;
+                        }
+                    }
+                }
+                if (targetMixer == null) { System.err.println("Device containing '" + deviceName + "' not found or doesn't support audio output. Using default."); playAudioFile(filename); return; }
+                javax.sound.sampled.AudioInputStream audioStream = javax.sound.sampled.AudioSystem.getAudioInputStream(audioFile);
+                javax.sound.sampled.AudioFormat format = audioStream.getFormat();
+                javax.sound.sampled.DataLine.Info info = new javax.sound.sampled.DataLine.Info(javax.sound.sampled.Clip.class, format);
+                javax.sound.sampled.Clip clip = (javax.sound.sampled.Clip) targetMixer.getLine(info);
+                clip.open(audioStream);
+                if (clip.isControlSupported(javax.sound.sampled.FloatControl.Type.MASTER_GAIN)) {
+                    javax.sound.sampled.FloatControl gainControl = (javax.sound.sampled.FloatControl) clip.getControl(javax.sound.sampled.FloatControl.Type.MASTER_GAIN);
+                    gainControl.setValue(gainControl.getMaximum());
+                }
+                clip.start();
+                System.out.println("Audio playback started on specific device, duration: " + (clip.getMicrosecondLength() / 1000000.0) + " seconds");
+                Thread.sleep(clip.getMicrosecondLength() / 1000);
+                clip.close();
+                audioStream.close();
+            } catch (Exception e) { System.err.println("Error playing audio to specific device: " + e.getMessage()); e.printStackTrace(); }
+        }).start();
     }
 }

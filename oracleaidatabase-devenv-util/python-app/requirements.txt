@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+numpy
+requests
+python-multipart
+tika
+onnxruntime
+oracledb
+pydantic
+python-dotenv
+Pillow
+transformers
+torch
+openai

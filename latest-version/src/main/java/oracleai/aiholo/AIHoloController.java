@@ -34,10 +34,12 @@ import com.google.cloud.texttospeech.v1.AudioConfig;
 
 import org.springframework.beans.factory.annotation.Autowired;
 
+import javax.annotation.PostConstruct;
 import javax.sql.*;
 
 import java.sql.*;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Map;
 
@@ -62,6 +64,9 @@ public class AIHoloController {
     private static final String SANDBOX_API_URL = System.getenv("SANDBOX_API_URL");
     private static final String AI_OPTIMZER = System.getenv("AI_OPTIMZER");
     private static final String OPENAI_KEY = System.getenv("OPENAI_KEY");
+    private static final String OCI_VISION_ENDPOINT = System.getenv("OCI_VISION_ENDPOINT");
+    private static final String OCI_COMPARTMENT_ID = System.getenv("OCI_COMPARTMENT_ID");
+    private static final String OCI_API_KEY = System.getenv("OCI_API_KEY");
     // Langflow API configuration. These environment variables should be set
     // when deploying the application. LANGFLOW_SERVER_URL is the base URL for
     // the Langflow server (for example, http://host:7860/api), FLOW_ID is the
@@ -92,6 +97,8 @@ public class AIHoloController {
         registerAgent(new MirrorMeAgent(OUTPUT_FILE_PATH));
         registerAgent(new DigitalTwinAgent(OUTPUT_FILE_PATH));
         registerAgent(new SignAgent(OUTPUT_FILE_PATH));
+        registerAgent(new VisionAIAgent(OCI_VISION_ENDPOINT, OCI_COMPARTMENT_ID, OCI_API_KEY));
+        registerAgent(new AIToolkitAgent(SANDBOX_API_URL, AI_OPTIMZER));
         registerAgent(new FinancialAgent(LANGFLOW_SERVER_URL, LANGFLOW_FLOW_ID, LANGFLOW_API_KEY));
         registerAgent(new GamerAgent(OPENAI_KEY));
         // OptimizerToolkitAgent commented out - backend not working
@@ -150,14 +157,73 @@ public class AIHoloController {
         // If no specific agent matched, return the fallback agent
         return fallbackAgent;
     }
+    
+    /**
+     * Strip trigger keywords from the question before passing to agent
+     */
+    private static String stripTriggerKeywords(String question, Agent agent) {
+        if (agent == null) return question;
+        
+        String cleanQuestion = question;
+        String[][] keywords = agent.getKeywords();
+        
+        // Find the matching keyword set and remove those keywords
+        for (String[] keywordSet : keywords) {
+            boolean allMatch = true;
+            String lowerQuestion = question.toLowerCase();
+            for (String keyword : keywordSet) {
+                if (!lowerQuestion.contains(keyword.toLowerCase())) {
+                    allMatch = false;
+                    break;
+                }
+            }
+            
+            // If this keyword set matched, remove these keywords
+            if (allMatch) {
+                System.out.println("DEBUG: Matched keyword set: " + java.util.Arrays.toString(keywordSet));
+                for (String keyword : keywordSet) {
+                    // Simple case-insensitive replacement
+                    // First try with spaces around it, then without
+                    String pattern1 = "(?i)\\s+" + keyword + "\\s+";
+                    String pattern2 = "(?i)\\s+" + keyword + "(?=\\b|$)";
+                    String pattern3 = "(?i)(?<=^|\\b)" + keyword + "\\s+";
+                    String pattern4 = "(?i)\\b" + keyword + "\\b";
+                    
+                    cleanQuestion = cleanQuestion.replaceAll(pattern1, " ");
+                    cleanQuestion = cleanQuestion.replaceAll(pattern2, " ");
+                    cleanQuestion = cleanQuestion.replaceAll(pattern3, " ");
+                    cleanQuestion = cleanQuestion.replaceAll(pattern4, " ");
+                    
+                    System.out.println("DEBUG: After removing '" + keyword + "': '" + cleanQuestion + "'");
+                }
+                break;
+            }
+        }
+        
+        // Clean up extra whitespace and trim
+        cleanQuestion = cleanQuestion.replaceAll("\\s+", " ").trim();
+        
+        return cleanQuestion;
+    }
 
+    // Audio2Face support removed - always play locally
     static boolean isAudio2FaceEnabled() {
-        return AUDIO2FACE_ENABLED.get();
+        return false; // Always disabled
     }
 
     static void setAudio2FaceEnabled(boolean enabled) {
-        AUDIO2FACE_ENABLED.set(enabled);
-        System.out.println("Audio2Face playback " + (enabled ? "enabled" : "disabled"));
+        // No-op: Audio2Face removed
+        System.out.println("Audio2Face is no longer supported - audio always plays locally");
+    }
+    
+    @PostMapping("/config/docSimilarityThreshold")
+    @ResponseBody
+    public String setDocSimilarityThreshold(@RequestParam("threshold") double threshold) {
+        if (threshold < 0.0 || threshold > 1.0) {
+            return "Error: Threshold must be between 0.0 and 1.0";
+        }
+        oracleai.aiholo.agents.OracleDocAgent.setSimilarityThreshold(threshold);
+        return "Document similarity threshold set to: " + threshold;
     }
     
     // TTS Engine Configuration - GCP is the default for reliability
@@ -322,6 +388,21 @@ public class AIHoloController {
         // Constructor - inactivity monitor and RemoteApiPoller have been disabled
     }
 
+    /**
+     * Register agents that require Spring-managed dependencies (DataSource, ChatGPTService)
+     * This runs after Spring completes dependency injection
+     */
+    @PostConstruct
+    public void registerSpringDependentAgents() {
+        // Register OracleDocAgent with injected dataSource and chatGPTService
+        if (dataSource != null && chatGPTService != null) {
+            System.out.println("Registering OracleDocAgent with database connection");
+            registerAgent(new OracleDocAgent(dataSource, chatGPTService));
+        } else {
+            System.out.println("OracleDocAgent not registered - DataSource or ChatGPTService not available");
+        }
+    }
+
     @SuppressWarnings("unused")
     private void startInactivityMonitor() {
         System.out.println("startInactivityMonitor DISABLED - no more 15-minute explainer audio");
@@ -420,16 +501,16 @@ public class AIHoloController {
     @GetMapping("/play")
     @ResponseBody
     public String play(@RequestParam("question") String question,
-                       @RequestParam("selectedMode") String selectedMode,
                        @RequestParam("languageCode") String languageCode,
                        @RequestParam("voiceName") String voicename,
                        @RequestParam(value = "ttsMode", required = false) String ttsModeParam,
+                       @RequestParam(value = "llmModel", required = false, defaultValue = "gpt-4") String llmModel,
                        @RequestParam(value = "audioDelayMs", required = false, defaultValue = "500") Integer audioDelayMs,
                        @RequestParam(value = "enableDualAudio", required = false) Boolean enableDualAudio,
                        @RequestParam(value = "audioDeviceA", required = false) String audioDeviceAParam,
                        @RequestParam(value = "audioDeviceB", required = false) String audioDeviceBParam) throws Exception {
         System.out.println(
-                "play question: " + question + " selectedMode: " + selectedMode +
+                "play question: " + question +
                         " languageCode:" + languageCode + " voicename:" + voicename);
         System.out.println("modified question: " + question);
         String resolvedVoiceName = resolveFemaleVoice(languageCode);
@@ -576,30 +657,30 @@ public class AIHoloController {
         else if (languageCode.equals("zh-SG")) answer = "抱歉，我在数据库中找不到答案";
         else answer = "I'm sorry. I couldn't find an answer in the database";
         
-        if (selectedMode.contains("use chatgpt")) {
-            // Direct ChatGPT query mode
-            question = question.replace("use chatgpt", "").trim();
-            question += ". Respond in 25 words or less.";
-            aiPipelineLabel = "ChatGPT Direct";
-            long aiStartNs = System.nanoTime();
-            answer = chatGPTService.queryChatGPT(question);
-            aiDurationMillis = (System.nanoTime() - aiStartNs) / 1_000_000.0;
-            
-        } else if (selectedMode.contains("use vector")) {
-            question = question.replace("use vectorrag", "").trim();
-            question += ". Respond in 25 words or less. " + aiholo_prompt_additions;
-            
+        if (true) {
             // Check if any registered agent can handle this question
             Agent matchingAgent = findAgentForQuestion(normalized);
             System.out.println("Agent search for '" + normalized + "': " + 
                 (matchingAgent != null ? matchingAgent.getName() : "null"));
+            
+            // Strip trigger keywords BEFORE adding instructions
+            String processedQuestion = question.replace("use vectorrag", "").trim();
+            if (matchingAgent != null) {
+                System.out.println("DEBUG: Before stripping: '" + processedQuestion + "'");
+                System.out.println("DEBUG: Agent keywords: " + java.util.Arrays.deepToString(matchingAgent.getKeywords()));
+                processedQuestion = stripTriggerKeywords(processedQuestion, matchingAgent);
+                System.out.println("DEBUG: After stripping: '" + processedQuestion + "'");
+            }
+            
+            // Now add the instruction suffix
+            processedQuestion += ". Respond in 25 words or less. " + aiholo_prompt_additions;
             
             long aiStartNs = System.nanoTime();
             if (matchingAgent != null) {
                 aiPipelineLabel = matchingAgent.getName();
                 // Write agent value name to output file
                 theValue = matchingAgent.getValueName();
-                System.out.println("AGENT MATCH: " + matchingAgent.getName() + " writing value: " + theValue + " to file");
+                System.out.println("---------APPROPRIATE AGENT FOUND: " + matchingAgent.getName() + " writing value: " + theValue + " to file");
                 try (FileWriter writer = new FileWriter(filePath)) {
                     JSONObject json = new JSONObject();
                     json.put("data", theValue);
@@ -609,21 +690,16 @@ public class AIHoloController {
                 } catch (IOException e) {
                     System.err.println("Error writing agent name to file: " + e.getMessage());
                 }
-                answer = matchingAgent.processQuestion(question);
-            } else {
-                aiPipelineLabel = "executeSandbox";
-                try {
-                    answer = executeSandbox(question);
-                } catch (Exception e) {
-                    System.err.println("External AI service unavailable, using fallback: " + e.getMessage());
-                    aiPipelineLabel = "fallback";
-                    answer = "I'm sorry, the external AI service is temporarily unavailable. Please try again later.";
-                }
+                
+                System.out.println("Original question: " + question);
+                System.out.println("Cleaned question for agent: " + processedQuestion);
+                
+                answer = matchingAgent.processQuestion(processedQuestion);
             }
             aiDurationMillis = (System.nanoTime() - aiStartNs) / 1_000_000.0;
 
         } else {
-            if (selectedMode.contains("use narrate")) {
+            if (true) {
                 action = "narrate";
                 question = question.replace("use narrate", "").trim();
             } else {
@@ -702,6 +778,13 @@ public class AIHoloController {
      * }'
      */
 
+    /**
+     * DEPRECATED: This method has been replaced by the AIToolkitAgent class.
+     * The agent registration system now handles AI Toolkit/Sandbox queries.
+     * 
+     * @deprecated Use the AIToolkitAgent in the agent registration system instead
+     */
+    @Deprecated
     public String executeSandbox(String cummulativeResult) {
         System.out.println("using AI sandbox: " + cummulativeResult);
         Map<String, Object> payload = new HashMap<>();
@@ -891,39 +974,10 @@ public class AIHoloController {
     }
 
 
-    // Vector embedding, store, langchain, etc. stuff...
-
-
-//    @Autowired
-//    VectorStore vectorStore;
-//
-//    @GetMapping("/vectorstoretest")
-//    @ResponseBody
-//    public String vectorstoretest(@RequestParam("question") String question,
-//                                  @RequestParam("selectedMode") String selectedMode,
-//                                  @RequestParam("languageCode") String languageCode,
-//                                  @RequestParam("voiceName") String voicename) throws Exception {
-////        System.out.println(
-//        List<Document> documents = List.of(
-//                new Document("Spring AI rocks!! Spring AI rocks!!", Map.of("meta1", "meta1")),
-//                new Document("The World is Big and Salvation Lurks Around the Corner"),
-//                new Document("You walk forward facing the past and you turn back toward the future.",  Map.of("meta2", "meta2")));
-//        // Add the documents to Oracle Vector Store
-//        vectorStore.add(documents);
-//        // Retrieve documents similar to a query
-//        List<Document> results =
-//                vectorStore.similaritySearch(SearchRequest.builder().query(question).topK(5).build());
-////                vectorStore.similaritySearch(SearchRequest.builder().query("Spring").topK(5).build());
-//        return "test";
-//        //results.getFirst().getFormattedContent(); give s cannot find symbol
-//        //[ERROR]   symbol:   method getFirst()
-//        //[ERROR]   location: variable results of type java.util.List<org.springframework.ai.document.Document>
-//    }
 
     @GetMapping("/langchain")
     @ResponseBody
     public String langchain(@RequestParam("question") String question,
-                            @RequestParam("selectedMode") String selectedMode,
                             @RequestParam("languageCode") String languageCode,
                             @RequestParam("voiceName") String voicename) throws Exception {
         EmbeddingSearchRequest embeddingSearchRequest = null;
@@ -999,6 +1053,30 @@ public class AIHoloController {
     public String getSimpleValue() {
         System.out.println("Simple get: " + simpleValue);
         return simpleValue;
+    }
+
+    @PostMapping("/vision/analyze")
+    @ResponseBody
+    public String analyzeVisionImage(@RequestBody Map<String, String> payload) {
+        System.out.println("Vision AI analysis requested");
+        
+        String imageData = payload.get("imageData");
+        if (imageData == null || imageData.isEmpty()) {
+            return "Error: No image data provided";
+        }
+        
+        // Find the VisionAIAgent
+        for (Agent agent : registeredAgents) {
+            if (agent instanceof VisionAIAgent) {
+                VisionAIAgent visionAgent = (VisionAIAgent) agent;
+                if (!visionAgent.isConfigured()) {
+                    return "Vision AI Agent is not configured. Please set OCI_VISION_ENDPOINT and OCI_COMPARTMENT_ID environment variables.";
+                }
+                return visionAgent.analyzeImage(imageData);
+            }
+        }
+        
+        return "Vision AI Agent is not available";
     }
 
     @GetMapping("/playarbitrary")

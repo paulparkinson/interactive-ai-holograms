@@ -4,6 +4,12 @@ REM Copy this file to run_aiholo.bat and replace with your actual values
 
 set SANDBOX_API_URL=http://YOUR_SANDBOX_SERVER/v1/chat/completions?client=server
 set AI_OPTIMZER=Bearer YOUR_AI_OPTIMIZER_TOKEN_HERE
+set OPENAI_KEY=sk-YOUR_OPENAI_API_KEY_HERE
+set OPENAI_API_KEY=sk-YOUR_OPENAI_API_KEY_HERE
+set OPENAI_MODEL=gpt-4
+set OCI_VISION_ENDPOINT=https://vision.aiservice.YOUR_REGION.oci.oraclecloud.com/20220125
+set OCI_COMPARTMENT_ID=ocid1.compartment.oc1..YOUR_COMPARTMENT_ID
+set OCI_API_KEY=YOUR_OCI_API_KEY_OPTIONAL
 set AIHOLO_HOST_URL=http://localhost:8080
 set AUDIO_DIR_PATH=C:\path\to\your\project\src\main\resources\static\audio-aiholo\
 set LANGFLOW_SERVER_URL=http://YOUR_LANGFLOW_SERVER:7860/api

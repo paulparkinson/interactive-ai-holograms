@@ -63,6 +63,7 @@ public class GetSetController {
      */
     public static void setValue(String value) {
         aiholoValue = value;
+        simpleValue = value;  // Also set simpleValue so /simple/get returns the redirect data
         aiholoType = "redirect";
         System.out.println("Static setValue called with: " + value);    
     }

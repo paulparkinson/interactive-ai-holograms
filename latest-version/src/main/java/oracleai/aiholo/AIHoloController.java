@@ -6,6 +6,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CompletableFuture;
 
 import oracleai.common.GetSetController;
 
@@ -44,7 +45,6 @@ import java.util.Locale;
 import java.util.Map;
 
 import org.springframework.http.*;
-
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -81,9 +81,22 @@ public class AIHoloController {
             new AtomicBoolean(Boolean.parseBoolean(System.getenv("IS_AUDIO2FACE")));
     private static final boolean REDIRECT_ANSWER = 
             Boolean.parseBoolean(System.getenv().getOrDefault("REDIRECT_ANSWER", "false"));
+    private static final boolean POLL_FOR_ANSWERS = 
+            Boolean.parseBoolean(System.getenv().getOrDefault("POLL_FOR_ANSWERS", "false"));
+    private static final String POLL_SERVER_URL = 
+            System.getenv().getOrDefault("POLL_SERVER_URL", "https://localhost:443");
+    private static final String POLL_USERNAME = 
+            System.getenv().getOrDefault("POLL_USERNAME", "oracleai");
+    private static final String POLL_PASSWORD = 
+            System.getenv().getOrDefault("POLL_PASSWORD", "oracleai");
+    private static final int POLL_INTERVAL_MS = 
+            Integer.parseInt(System.getenv().getOrDefault("POLL_INTERVAL_MS", "1000"));
     private static int audioDelayMs = 500; // Default delay between dual audio outputs in milliseconds
     private static boolean enableIntroAudio = false; // Set to false to disable random intro sounds
     private static boolean enableDualAudioOutput = true; // Set to true to enable dual audio output
+    
+    // Polling client instance
+    private static PollingClient pollingClient;
     
     // Configurable audio output devices
     private static String audioDeviceA = "CABLE Input (VB-Audio Virtual Cable)"; // Java Stream A → Unreal
@@ -386,6 +399,56 @@ public class AIHoloController {
 
     public AIHoloController() {
         // Constructor - inactivity monitor and RemoteApiPoller have been disabled
+        
+        // Start polling client if enabled
+        if (POLL_FOR_ANSWERS && !REDIRECT_ANSWER) {
+            startPollingClient();
+        }
+    }
+    
+    /**
+     * Start the polling client that checks the server for new answers and plays them locally
+     */
+    private void startPollingClient() {
+        if (pollingClient == null) {
+            pollingClient = new PollingClient(POLL_SERVER_URL, POLL_USERNAME, POLL_PASSWORD, POLL_INTERVAL_MS, this);
+            pollingClient.start();
+        }
+    }
+    
+    /**
+     * Play a polled answer locally using existing TTS infrastructure
+     * Called by PollingClient when a new answer is received
+     */
+    public void playPolledAnswer(String textToSay, String languageCode, String voiceName,
+                                String aiPipelineLabel, double aiDurationMillis, TTSSelection ttsSelection,
+                                boolean audio2FaceEnabled) {
+        try {
+            // Use local defaults for audio configuration
+            String fileName = "polled_output.wav";
+            boolean enableDualAudio = AIHoloController.enableDualAudioOutput;
+            String deviceA = AIHoloController.audioDeviceA;
+            String deviceB = AIHoloController.audioDeviceB;
+            int delayMs = AIHoloController.audioDelayMs;
+            
+            // Generate and play TTS using existing method
+            generateAndPlayTts(fileName, textToSay, languageCode, voiceName,
+                aiPipelineLabel, aiDurationMillis, ttsSelection, audio2FaceEnabled,
+                enableDualAudio, deviceA, deviceB, delayMs);
+                
+        } catch (Exception e) {
+            System.err.println("Error playing polled answer: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Stop the polling client
+     */
+    public void stopPollingClient() {
+        if (pollingClient != null) {
+            pollingClient.stop();
+        }
     }
 
     /**
@@ -554,12 +617,6 @@ public class AIHoloController {
             return "Error writing to file: " + e.getMessage();
         }
             String normalized = question.toLowerCase();
-            // Commented out - this was interfering with GamerAgent keyword matching
-            // boolean videoAgentIntent = normalized.contains("video") && normalized.contains("agent");
-            // if (videoAgentIntent) {
-            //     triggerVideoAgent("leia");
-            //     return "Triggered video agent";
-            // }   
 
         // DISABLED: Intro audio was causing overlapping audio loops  
         // This thread was playing intro sounds that overlapped with main response audio
@@ -815,118 +872,6 @@ public class AIHoloController {
     }
 
     /**
-     * DEPRECATED: This method has been replaced by the FinancialAgent class.
-     * The agent registration system now handles financial agent queries.
-     * 
-     * @deprecated Use the Agent registration system instead
-     */
-    /*
-    public String executeFinancialAgent(String question) {
-        System.out.println("using financial agent: " + question);
-        if (LANGFLOW_SERVER_URL == null || LANGFLOW_FLOW_ID == null || LANGFLOW_API_KEY == null) {
-            return "Error: Langflow configuration is not set";
-        }
-        // Build the URL. The /v1/run endpoint executes a flow by ID. The
-        // stream=false query parameter disables token streaming.
-        String url = LANGFLOW_SERVER_URL + "/v1/run/" + LANGFLOW_FLOW_ID + "?stream=false";
-        // Construct the request payload
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("output_type", "chat");
-        payload.put("input_type", "chat");
-        payload.put("input_value", question);
-
-        JSONObject jsonPayload = new JSONObject(payload);
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        // Provide the API key for authentication
-        headers.set("x-api-key", LANGFLOW_API_KEY);
-        HttpEntity<String> request = new HttpEntity<>(jsonPayload.toString(), headers);
-        RestTemplate restTemplate = new RestTemplate();
-        try {
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, request, String.class);
-            if (response.getStatusCode() == HttpStatus.OK) {
-                // Ensure the response body is JSON before attempting to parse it.
-                String body = response.getBody();
-                if (body == null) {
-                    return "Error: Empty response from Langflow";
-                }
-                String trimmedBody = body.trim();
-                if (!trimmedBody.startsWith("{") && !trimmedBody.startsWith("[")) {
-                    // Langflow returned a non‑JSON response (e.g. HTML error page).
-                    // Return the raw body so the caller can log or display it.
-                    return trimmedBody;
-                }
-                JSONObject responseData;
-                try {
-                    responseData = new JSONObject(trimmedBody);
-                } catch (Exception e) {
-                    // The body looked like JSON but failed to parse.
-                    return "Error parsing Langflow response: " + e.getMessage();
-                }
-                // Parse the JSON response and extract the message. The message is
-                // nested under outputs[0].outputs[0].outputs.message.message or
-                // outputs[0].outputs[0].results.message.text depending on the
-                // flow configuration. We'll attempt multiple paths.
-                try {
-                    // Older flows: outputs[0].outputs[0].outputs.message.message
-                    String message = responseData
-                            .getJSONArray("outputs")
-                            .getJSONObject(0)
-                            .getJSONArray("outputs")
-                            .getJSONObject(0)
-                            .getJSONObject("outputs")
-                            .getJSONObject("message")
-                            .getString("message");
-                    if (message != null && !message.isEmpty()) {
-                        return message;
-                    }
-                } catch (Exception ignore) {
-                    // fall through to next attempt
-                }
-                try {
-                    // Newer flows: outputs[0].outputs[0].results.message.text
-                    String message = responseData
-                            .getJSONArray("outputs")
-                            .getJSONObject(0)
-                            .getJSONArray("outputs")
-                            .getJSONObject(0)
-                            .getJSONObject("results")
-                            .getJSONObject("message")
-                            .getString("text");
-                    if (message != null && !message.isEmpty()) {
-                        return message;
-                    }
-                } catch (Exception ignore) {
-                    // fall through to next attempt
-                }
-                try {
-                    // Fallback: check nested data text (results.message.data.text)
-                    String message = responseData
-                            .getJSONArray("outputs")
-                            .getJSONObject(0)
-                            .getJSONArray("outputs")
-                            .getJSONObject(0)
-                            .getJSONObject("results")
-                            .getJSONObject("message")
-                            .getJSONObject("data")
-                            .getString("text");
-                    if (message != null && !message.isEmpty()) {
-                        return message;
-                    }
-                } catch (Exception ignore) {
-                    // no more attempts
-                }
-                return "Error parsing Langflow JSON response";
-            } else {
-                return "Error: " + response.getStatusCode() + " " + response.getBody();
-            }
-        } catch (Exception e) {
-            return "Error calling Langflow: " + e.getMessage();
-        }
-    }
-    */
-
-    /**
      * Utilities not required by Interactive AI Holograms from here to end...
      */
 
@@ -1055,7 +1000,7 @@ public class AIHoloController {
         return simpleValue;
     }
 
-    @PostMapping("/vision/analyze")
+    @GetMapping("/vision/analyze")
     @ResponseBody
     public String analyzeVisionImage(@RequestBody Map<String, String> payload) {
         System.out.println("Vision AI analysis requested");
@@ -1077,6 +1022,30 @@ public class AIHoloController {
         }
         
         return "Vision AI Agent is not available";
+    }
+
+    @GetMapping("/polling/stop")
+    @ResponseBody
+    public String stopPolling() {
+        if (POLL_FOR_ANSWERS) {
+            stopPollingClient();
+            return "Polling client stopped";
+        } else {
+            return "Polling not enabled (POLL_FOR_ANSWERS=false)";
+        }
+    }
+
+    @GetMapping("/polling/status")
+    @ResponseBody
+    public String getPollingStatus() {
+        JSONObject status = new JSONObject();
+        status.put("pollForAnswers", POLL_FOR_ANSWERS);
+        status.put("redirectAnswer", REDIRECT_ANSWER);
+        status.put("pollingActive", pollingClient != null && pollingClient.isActive());
+        status.put("pollServerUrl", POLL_SERVER_URL);
+        status.put("pollIntervalMs", POLL_INTERVAL_MS);
+        status.put("lastProcessedTimestamp", pollingClient != null ? pollingClient.getLastProcessedTimestamp() : 0);
+        return status.toString();
     }
 
     @GetMapping("/playarbitrary")
@@ -1114,9 +1083,13 @@ public class AIHoloController {
             } catch (IOException e) {
                 return "Error writing to file: " + e.getMessage();
             }
-        generateAndPlayTts("output.wav", answer, languageCode, voicename,
-            "Manual playback", 0.0, ttsSelection, audio2FaceEnabled, 
-            AIHoloController.enableDualAudioOutput, AIHoloController.audioDeviceA, AIHoloController.audioDeviceB, audioDelayMs);
+            if (REDIRECT_ANSWER) {
+                executeRedirect(answer, languageCode, voicename, "Manual playback", 0.0, ttsSelection, audio2FaceEnabled);
+            } else {
+                generateAndPlayTts("output.wav", answer, languageCode, voicename,
+                    "Manual playback", 0.0, ttsSelection, audio2FaceEnabled, 
+                    AIHoloController.enableDualAudioOutput, AIHoloController.audioDeviceA, AIHoloController.audioDeviceB, audioDelayMs);
+            }
             return "OK";
         } catch (Exception e) {
             e.printStackTrace();
@@ -1124,47 +1097,6 @@ public class AIHoloController {
         }
     }
     
-    // Commented out - video agent functionality moved to agent system
-    /*
-    private static void triggerVideoAgent(String providedValue) {
-        try {
-            RestTemplate restTemplate = new RestTemplate();
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBasicAuth("oracleai", "oraclespatialai");
-            HttpEntity<Void> entity = new HttpEntity<>(headers);
-            String baseUrl = "http://150.136.102.87:8080/status/aiholo/set";
-            URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
-                    .queryParam("type", "video")
-                    .queryParam("value", providedValue)
-                    .build(true)
-                    .toUri();
-            ResponseEntity<String> response = restTemplate.exchange(uri, HttpMethod.GET, entity, String.class);
-            System.out.println("Video agent status=" + response.getStatusCode());
-            if (response.getBody() != null && !response.getBody().isBlank()) {
-                System.out.println("Video agent response body: " + response.getBody());
-            }
-        } catch (Exception e) {
-            System.err.println("Failed to notify video agent: " + e.getMessage());
-        }
-
-        final boolean audio2FaceEnabled = isAudio2FaceEnabled();
-        new Thread(() -> {
-            try {
-                if (audio2FaceEnabled) {
-                    TTSAndAudio2Face.sendToAudio2Face("tts-en-USFEMALEAoede_playingvideo.wav");
-                } else {
-                    // Play audio for Unreal Live Link Hub source (first output)
-                    TTSAndAudio2Face.playAudioFileToDevice("tts-en-USFEMALEAoede_playingvideo.wav", "CABLE");
-                    // Wait ~800ms then play to local speaker (second output)
-                    try { Thread.sleep(audioDelayMs); } catch (InterruptedException e) { }
-                    TTSAndAudio2Face.playAudioFile("tts-en-USFEMALEAoede_playingvideo.wav");
-                }
-            } catch (Exception audioError) {
-                System.err.println("Failed to play video agent audio: " + audioError.getMessage());
-            }
-        }).start();
-    }
-    */
 
     /**
      * Execute redirect - stores answer parameters as JSON in GetSetController instead of playing audio

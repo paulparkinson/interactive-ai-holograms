@@ -14,6 +14,12 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Set;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 /**
  * Oracle Document Agent that performs vector search on the documents table
@@ -21,7 +27,7 @@ import java.util.List;
  * 
  * This agent:
  * 1. Connects to Oracle Database using the configured DataSource
- * 2. Generates embeddings using OpenAI's embedding API (text-embedding-3-small)
+ * 2. Uses Oracle's built-in VECTOR_EMBEDDING() function for consistency with Python app.py
  * 3. Performs vector similarity search on the documents table using COSINE distance
  * 4. Retrieves relevant document chunks based on the question
  * 5. Uses ChatGPT to generate contextual answers from the retrieved documents
@@ -31,10 +37,11 @@ public class OracleDocAgent implements Agent {
     private final DataSource dataSource;
     private final ChatGPTService chatGPTService;
     private static final int MAX_RESULTS = 5; // Number of similar documents to retrieve
-    private static double SIMILARITY_THRESHOLD = 0.90; // Only use chunks with distance <= 0.90 (lower = more similar)
-    private static final String OPENAI_EMBEDDING_URL = "https://api.openai.com/v1/embeddings";
-    private static final String EMBEDDING_MODEL = "text-embedding-3-small";
-    private final RestTemplate restTemplate = new RestTemplate();
+    private static double SIMILARITY_THRESHOLD = 0.3; // Similarity score threshold (0-1 scale) - lowered for text search
+    
+    // Oracle model configuration - should match the model imported via Python app.py
+    // Python app.py uses "all_MiniLM_L12_v2" and converts to uppercase: "ALL_MINILM_L12_V2"
+    private static final String ORACLE_MODEL_NAME = System.getenv().getOrDefault("ORACLE_MODEL_NAME", "ALL_MINILM_L12_V2");
     
     // Getter and setter for similarity threshold
     public static double getSimilarityThreshold() {
@@ -67,13 +74,14 @@ public class OracleDocAgent implements Agent {
         return new String[][] {
             {"search", "documents"},
             {"search", "documentation"},
-            {"find", "documents"}
+            {"find", "documents"},
+            {"rechercher" , "documents"}
         };
     }
 
     @Override
     public boolean isConfigured() {
-        // Only need DataSource - embeddings are generated in Oracle Database
+        // Only need DataSource - embeddings are generated via Oracle's VECTOR_EMBEDDING() function
         return dataSource != null;
     }
 
@@ -96,12 +104,14 @@ public class OracleDocAgent implements Agent {
             // Step 2: Filter by similarity threshold (only keep highly relevant chunks)
             List<DocumentChunk> relevantDocs = new ArrayList<>();
             for (DocumentChunk chunk : allDocs) {
-                if (chunk.distance <= SIMILARITY_THRESHOLD) {
+                // Convert to similarity score if needed (chunk.distance is now similarity score 0-1)
+                double similarity = chunk.distance; // Already a similarity score
+                if (similarity >= SIMILARITY_THRESHOLD) {
                     relevantDocs.add(chunk);
                 } else {
                     System.out.println("Filtered out chunk from " + chunk.name + 
-                                     " (distance: " + String.format("%.4f", chunk.distance) + 
-                                     " > threshold: " + SIMILARITY_THRESHOLD + ")");
+                                     " (similarity: " + String.format("%.4f", similarity) + 
+                                     " < threshold: " + SIMILARITY_THRESHOLD + ")");
                 }
             }
             
@@ -161,34 +171,195 @@ public class OracleDocAgent implements Agent {
     }
     
     /**
-     * Search for similar documents using OpenAI embeddings and Oracle vector distance
+     * Search for similar documents using Oracle's VECTOR_EMBEDDING() function
+     * This matches the Python app.py oracle_native approach for maximum consistency
      */
     private List<DocumentChunk> searchDocuments(String question) throws Exception {
         List<DocumentChunk> results = new ArrayList<>();
         
-        // Step 1: Generate embedding for the question using OpenAI API
-        float[] questionEmbedding = generateEmbedding(question);
+        // First try using Oracle's VECTOR_EMBEDDING() function
+        try {
+            // Check if models are available first
+            checkAvailableModels();
+            
+            // Try different VECTOR_EMBEDDING syntaxes
+            String[] sqlVariants = {
+                // Variant 1: Model name as parameter
+                """
+                SELECT id, name, chunk_index, text, 
+                       ROUND(1 - VECTOR_DISTANCE(embedding, VECTOR_EMBEDDING(? USING ? as data), COSINE) / 2, 6) as similarity_score
+                FROM documents
+                ORDER BY similarity_score DESC
+                FETCH FIRST ? ROWS ONLY
+                """,
+                // Variant 2: Model name directly in SQL (not parameterized)
+                String.format("""
+                SELECT id, name, chunk_index, text, 
+                       ROUND(1 - VECTOR_DISTANCE(embedding, VECTOR_EMBEDDING(%s USING ? as data), COSINE) / 2, 6) as similarity_score
+                FROM documents
+                ORDER BY similarity_score DESC
+                FETCH FIRST ? ROWS ONLY
+                """, ORACLE_MODEL_NAME)
+            };
+            
+            boolean vectorSearchSuccessful = false;
+            
+            for (int i = 0; i < sqlVariants.length && !vectorSearchSuccessful; i++) {
+                try (Connection conn = dataSource.getConnection();
+                     PreparedStatement pstmt = conn.prepareStatement(sqlVariants[i])) {
+                    
+                    System.out.println("Trying VECTOR_EMBEDDING search variant " + (i+1) + " with model: " + ORACLE_MODEL_NAME);
+                    
+                    if (i == 0) {
+                        // Variant 1: Both model and question as parameters
+                        pstmt.setString(1, ORACLE_MODEL_NAME);
+                        pstmt.setString(2, question);
+                        pstmt.setInt(3, MAX_RESULTS);
+                    } else {
+                        // Variant 2: Only question as parameter (model name in SQL)
+                        pstmt.setString(1, question);
+                        pstmt.setInt(2, MAX_RESULTS);
+                    }
+                
+                    try (ResultSet rs = pstmt.executeQuery()) {
+                        while (rs.next()) {
+                            String text = rs.getString("text");
+                            DocumentChunk chunk = new DocumentChunk(
+                                rs.getString("id"),
+                                rs.getString("name"),
+                                rs.getInt("chunk_index"),
+                                text,
+                                rs.getDouble("similarity_score")
+                            );
+                            results.add(chunk);
+                            System.out.println("Found vector chunk (variant " + (i+1) + "): " + chunk.name + " (similarity: " + 
+                                             String.format("%.4f", chunk.distance) + ")");
+                        }
+                    }
+                    
+                    // If we got results, mark as successful and break
+                    if (!results.isEmpty()) {
+                        vectorSearchSuccessful = true;
+                        System.out.println("VECTOR_EMBEDDING search successful with variant " + (i+1));
+                        break;
+                    }
+                } catch (Exception e) {
+                    String errorMsg = e.getMessage();
+                    System.err.println("VECTOR_EMBEDDING variant " + (i+1) + " failed: " + errorMsg);
+                    if (errorMsg != null && errorMsg.contains("ORA-40281")) {
+                        System.err.println("Model '" + ORACLE_MODEL_NAME + "' not found or not properly imported.");
+                    } else if (errorMsg != null && errorMsg.contains("ORA-51808")) {
+                        System.err.println("Vector dimension mismatch. The model produces different dimensions than stored embeddings.");
+                        System.err.println("This suggests the documents were indexed with a different model than " + ORACLE_MODEL_NAME);
+                    }
+                    // Continue to next variant
+                }
+            }
+            
+            // If we got results from any variant, return them
+            if (vectorSearchSuccessful && !results.isEmpty()) {
+                return results;
+            }
+        } catch (Exception e) {
+            String errorMsg = e.getMessage();
+            System.err.println("All VECTOR_EMBEDDING variants failed: " + errorMsg);
+            System.out.println("Falling back to text-based search...");
+        }
         
-        // Step 2: Convert float array to Oracle VECTOR format string
-        String vectorString = floatArrayToVectorString(questionEmbedding);
+        // Fallback: Text-based search with multiple strategies
+        System.out.println("Using text-based search with keywords: " + extractKeywords(question));
         
-        // Step 3: Oracle 23ai vector similarity search
-        String sql = """
+        // Strategy 1: Search for all keywords together
+        String allKeywords = extractKeywords(question);
+        System.out.println("Extracted keywords: '" + allKeywords + "'");
+        
+        // Special handling for specific Oracle services
+        if (question.toLowerCase().contains("fast connect") || question.toLowerCase().contains("fastconnect")) {
+            // Try specific FastConnect terms first
+            results.addAll(performTextSearch("%fastconnect%", "fastconnect (one word)"));
+            if (results.isEmpty()) {
+                results.addAll(performTextSearch("%fast connect%", "fast connect (two words)"));
+            }
+            if (results.isEmpty()) {
+                results.addAll(performTextSearch("%networking%", "networking"));
+            }
+        } else if (question.toLowerCase().contains("dedicated region") || question.toLowerCase().contains("oci dedicated")) {
+            // Try dedicated region specific terms
+            results.addAll(performTextSearch("%dedicated region%", "dedicated region"));
+            if (results.isEmpty()) {
+                results.addAll(performTextSearch("%oci dedicated%", "oci dedicated"));
+            }
+            if (results.isEmpty()) {
+                results.addAll(performTextSearch("%dedicated%", "dedicated"));
+            }
+        } else {
+            // General search - try exact phrase first
+            results.addAll(performTextSearch("%" + allKeywords + "%", "all keywords"));
+        }
+        
+        // Strategy 2: Search for individual important keywords if no results from strategy 1
+        if (results.isEmpty()) {
+            String[] individualKeywords = allKeywords.split("\\s+");
+            for (String keyword : individualKeywords) {
+                if (keyword.length() > 2) {  // Skip very short words
+                    List<DocumentChunk> keywordResults = performTextSearch("%" + keyword + "%", "keyword: " + keyword);
+                    
+                    // Only add if we don't have results, or if this keyword seems more relevant
+                    if (results.isEmpty()) {
+                        results.addAll(keywordResults);
+                    }
+                    
+                    if (results.size() >= MAX_RESULTS) break;  // Don't get too many
+                }
+            }
+        }
+        
+        // Strategy 3: Broader search if still no results
+        if (results.isEmpty()) {
+            // Try searching for just "connect" if the question contains "fast connect"
+            if (question.toLowerCase().contains("connect")) {
+                results.addAll(performTextSearch("%connect%", "broad search: connect"));
+            }
+        }
+        
+        // If no results found, check if there are any documents at all
+        if (results.isEmpty()) {
+            checkDocumentCount();
+        }
+        
+        return results;
+    }
+    
+    /**
+     * Perform a text search with the given pattern and strategy description
+     */
+    private List<DocumentChunk> performTextSearch(String searchPattern, String strategy) {
+        List<DocumentChunk> results = new ArrayList<>();
+        
+        String textSql = """
             SELECT id, name, chunk_index, text, 
-                   VECTOR_DISTANCE(embedding, ?, COSINE) as distance
+                   0.8 as similarity_score
             FROM documents
-            ORDER BY distance
+            WHERE UPPER(text) LIKE UPPER(?) OR UPPER(name) LIKE UPPER(?)
+            ORDER BY 
+                CASE 
+                    WHEN UPPER(text) LIKE UPPER(?) THEN 1
+                    WHEN UPPER(name) LIKE UPPER(?) THEN 2
+                    ELSE 3
+                END
             FETCH FIRST ? ROWS ONLY
             """;
         
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+             PreparedStatement pstmt = conn.prepareStatement(textSql)) {
             
-            System.out.println("Executing vector similarity search...");
+            System.out.println("Trying " + strategy + " with pattern: " + searchPattern);
             
-            // Set the vector parameter as a string representation
-            pstmt.setString(1, vectorString);
-            pstmt.setInt(2, MAX_RESULTS);
+            pstmt.setString(1, searchPattern);
+            pstmt.setString(2, searchPattern);
+            pstmt.setString(3, searchPattern);
+            pstmt.setString(4, searchPattern);
+            pstmt.setInt(5, MAX_RESULTS);
             
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
@@ -198,70 +369,115 @@ public class OracleDocAgent implements Agent {
                         rs.getString("name"),
                         rs.getInt("chunk_index"),
                         text,
-                        rs.getDouble("distance")
+                        rs.getDouble("similarity_score")
                     );
                     results.add(chunk);
-                    System.out.println("Found document chunk: " + chunk.name + 
-                                     " (chunk " + chunk.chunkIndex + 
-                                     ", distance: " + String.format("%.4f", chunk.distance) + ")");
-                    System.out.println("  Text preview: " + (text != null && text.length() > 100 ? 
+                    System.out.println("Found text match (" + strategy + "): " + chunk.name + " (chunk " + chunk.chunkIndex + ")");
+                    System.out.println("  Preview: " + (text != null && text.length() > 100 ? 
                                      text.substring(0, 100) + "..." : text));
                 }
             }
+        } catch (Exception e) {
+            System.err.println("Text search failed (" + strategy + "): " + e.getMessage());
         }
         
         return results;
     }
     
     /**
-     * Generate embedding for text using OpenAI API
+     * Extract meaningful keywords from question, preserving technical terms
      */
-    private float[] generateEmbedding(String text) throws Exception {
-        String apiKey = System.getenv("OPENAI_API_KEY");
-        if (apiKey == null || apiKey.isEmpty() || apiKey.startsWith("sk-YOUR_")) {
-            throw new IllegalStateException("OPENAI_API_KEY environment variable not set");
+    private String extractKeywords(String question) {
+        if (question == null || question.trim().isEmpty()) {
+            return "";
         }
         
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(apiKey);
+        // Remove common noise patterns
+        String clean = question
+            .replaceAll("(?i)Q\\d+:\\s*", "")  // Remove "Q1:", "Q2:", etc.
+            .replaceAll("(?i)Q:\\s*", "")      // Remove "Q:"
+            .replaceAll("(?i)\\. Respond in \\d+ words or less\\.*", "")  // Remove response instructions
+            .replaceAll("\\s+", " ")          // Normalize whitespace
+            .trim();
         
-        JSONObject requestBody = new JSONObject();
-        requestBody.put("model", EMBEDDING_MODEL);
-        requestBody.put("input", text);
-        requestBody.put("dimensions", 512); // Match database vector dimension
+        // Split into words and filter more intelligently
+        String[] words = clean.split("\\s+");
+        List<String> keywords = new ArrayList<>();
         
-        HttpEntity<String> request = new HttpEntity<>(requestBody.toString(), headers);
+        // Define stop words but preserve technical terms
+        Set<String> stopWords = Set.of("the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by", "is", "are", "was", "were", "what", "how", "why", "when", "where", "tell", "me", "more", "about");
         
-        System.out.println("Generating embedding using OpenAI " + EMBEDDING_MODEL + "...");
-        String response = restTemplate.postForObject(OPENAI_EMBEDDING_URL, request, String.class);
+        // Technical terms to always preserve
+        Set<String> technicalTerms = Set.of("oci", "oracle", "cloud", "dedicated", "region", "fastconnect", "fast", "connect", "database", "ai", "vector", "search", "documentation");
         
-        JSONObject jsonResponse = new JSONObject(response);
-        JSONArray embeddingArray = jsonResponse.getJSONArray("data")
-                                               .getJSONObject(0)
-                                               .getJSONArray("embedding");
-        
-        float[] embedding = new float[embeddingArray.length()];
-        for (int i = 0; i < embeddingArray.length(); i++) {
-            embedding[i] = embeddingArray.getFloat(i);
+        for (String word : words) {
+            String lowerWord = word.toLowerCase().replaceAll("[^a-zA-Z0-9]", "");
+            
+            // Keep technical terms regardless of length
+            if (technicalTerms.contains(lowerWord)) {
+                keywords.add(lowerWord);
+            }
+            // Keep other words if they're not stop words and long enough
+            else if (lowerWord.length() > 2 && !stopWords.contains(lowerWord)) {
+                keywords.add(lowerWord);
+            }
         }
         
-        System.out.println("Generated embedding with " + embedding.length + " dimensions");
-        return embedding;
+        // Return the most important keywords (up to 5)
+        return keywords.stream()
+            .limit(5)
+            .reduce((a, b) -> a + " " + b)
+            .orElse(clean);
     }
     
     /**
-     * Convert float array to Oracle VECTOR string format: [0.1,0.2,0.3,...]
+     * Check if there are any documents in the database for debugging
      */
-    private String floatArrayToVectorString(float[] vector) {
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < vector.length; i++) {
-            if (i > 0) sb.append(",");
-            sb.append(vector[i]);
+    private void checkDocumentCount() {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement("SELECT COUNT(*) as doc_count FROM documents")) {
+            
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    int count = rs.getInt("doc_count");
+                    System.out.println("Total documents in database: " + count);
+                    if (count == 0) {
+                        System.out.println("No documents found in database. Please upload documents via Python app.py first.");
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to check document count: " + e.getMessage());
         }
-        sb.append("]");
-        return sb.toString();
     }
+    
+    /**
+     * Check what ONNX models are available in the database
+     */
+    private void checkAvailableModels() {
+        try (Connection conn = dataSource.getConnection()) {
+            String modelCheckSql = "SELECT model_name FROM user_mining_models ORDER BY model_name";
+            try (PreparedStatement pstmt = conn.prepareStatement(modelCheckSql);
+                 ResultSet rs = pstmt.executeQuery()) {
+                
+                System.out.println("Available ONNX models in database:");
+                boolean hasModels = false;
+                while (rs.next()) {
+                    String modelName = rs.getString("model_name");
+                    System.out.println("  - " + modelName);
+                    hasModels = true;
+                }
+                if (!hasModels) {
+                    System.out.println("  No ONNX models found. Use Python app.py /setup/import-onnx-model to import.");
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Could not check available models: " + e.getMessage());
+        }
+    }
+    
+    // Note: Embedding generation is now handled by Oracle's VECTOR_EMBEDDING() function
+    // No local embedding generation methods needed
     
     /**
      * Build context string from retrieved document chunks

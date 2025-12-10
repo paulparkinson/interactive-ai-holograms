@@ -58,6 +58,12 @@
 			<artifactId>commons-io</artifactId>
 			<version>2.14.0</version>
 		</dependency>
+		<!-- ONNX Runtime for local embedding models -->
+		<dependency>
+			<groupId>com.microsoft.onnxruntime</groupId>
+			<artifactId>onnxruntime</artifactId>
+			<version>1.19.0</version>
+		</dependency>
 		<dependency>
 			<groupId>com.oracle.cloud.spring</groupId>
 			<artifactId>spring-cloud-oci-starter</artifactId>

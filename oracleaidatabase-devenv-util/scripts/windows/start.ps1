@@ -48,6 +48,28 @@ if ([string]::IsNullOrEmpty($ORACLE_DATA_DIR)) {
     $ORACLE_DATA_DIR = "C:\data\oracle"
 }
 
+# Convert Windows path to Unix-style for Podman/WSL (C:\path -> /c/path)
+if ($CONTAINER_RUNTIME -eq "podman" -and $ORACLE_DATA_DIR -match "^([A-Z]):\\") {
+    $drive = $matches[1].ToLower()
+    $restPath = $ORACLE_DATA_DIR.Substring(3).Replace("\", "/")
+    $ORACLE_DATA_DIR = "/$drive/$restPath"
+    Write-Host "Converted path for Podman: $ORACLE_DATA_DIR"
+}
+
+# Prompt for Oracle Wallet location (for Autonomous Database connections)
+$WALLET_LOCATION = Read-Host "Path to Oracle Wallet directory (leave empty to skip, default: C:\Users\paulp\Downloads\Wallet_aiholodb)"
+if ([string]::IsNullOrEmpty($WALLET_LOCATION)) {
+    $WALLET_LOCATION = "C:\Users\paulp\Downloads\Wallet_aiholodb"
+}
+
+# Convert Windows path to Unix-style for Podman/WSL
+if ($CONTAINER_RUNTIME -eq "podman" -and $WALLET_LOCATION -match "^([A-Z]):\\") {
+    $drive = $matches[1].ToLower()
+    $restPath = $WALLET_LOCATION.Substring(3).Replace("\", "/")
+    $WALLET_LOCATION = "/$drive/$restPath"
+    Write-Host "Converted wallet path for Podman: $WALLET_LOCATION"
+}
+
 # Prompt for text model download
 $INSTALL_TEXT_MODEL = Read-Host "Download default text model for PDFs/text? (y/n)"
 if ([string]::IsNullOrEmpty($INSTALL_TEXT_MODEL)) {
@@ -121,6 +143,7 @@ ORACLE_PWD=$ORACLE_PWD
 ORACLE_USER=$ORACLE_USER
 ORACLE_SERVICE=$ORACLE_SERVICE
 ORACLE_DATA_DIR=$ORACLE_DATA_DIR
+WALLET_LOCATION=$WALLET_LOCATION
 MODEL_PATH_TEXT=/models/text_model.onnx
 MODEL_PATH_IMAGE=/models/image_model.onnx
 USE_ORACLE_VECTOR_SEARCH=$USE_ORACLE_VECTOR_SEARCH
@@ -139,6 +162,19 @@ Write-Host "- Oracle DB: localhost:1521"
 Write-Host "- Python app: http://localhost:8001"
 Write-Host "- Spring app: http://localhost:8080"
 Write-Host "- Vector search mode: $USE_ORACLE_VECTOR_SEARCH"
+
+# Prompt for Oracle Wallet location (for Autonomous Database connections)
+$WALLET_LOCATION = Read-Host -Prompt "Path to Oracle Wallet directory (leave empty if not using Autonomous DB, default: C:\Users\paulp\Downloads\Wallet_aiholodb)"
+if ([string]::IsNullOrWhiteSpace($WALLET_LOCATION)) {
+    $WALLET_LOCATION = "C:\Users\paulp\Downloads\Wallet_aiholodb"
+}
+
+# Convert Windows path to Unix-style for Podman/WSL
+if ($CONTAINER_RUNTIME -eq "podman" -and $WALLET_LOCATION -match "^([A-Z]):\\") {
+    $drive = $matches[1].ToLower()
+    $restPath = $WALLET_LOCATION.Substring(3).Replace("\\", "/")
+    $WALLET_LOCATION = "/$drive/$restPath"
+}
 
 Write-Host "Note: The vector worker will attempt to connect to Oracle using the provided credentials."
 Write-Host "If the Oracle service name in your DB image differs, update .env ORACLE_SERVICE accordingly."

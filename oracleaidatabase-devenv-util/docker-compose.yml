@@ -34,13 +34,14 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
       # Additional database connections
+      - TNS_ADMIN=/wallet
       - DB_PROD_WALLET_DIR=${DB_PROD_WALLET_DIR:-}
       - DB_PROD_WALLET_SERVICE=${DB_PROD_WALLET_SERVICE:-}
       - DB_PROD_USER=${DB_PROD_USER:-}
       - DB_PROD_PWD=${DB_PROD_PWD:-}
     volumes:
       - ./models:/models
-      - /home/paul/Downloads/Wallet_aiholodb:/wallet:ro
+      - ${WALLET_LOCATION:-/wallet_not_set}:/wallet:ro
     ports:
       - "8001:8001"
 
@@ -55,5 +56,11 @@ services:
       - VECTOR_WORKER_URL=http://python-app:8001
       - SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE=100MB
       - SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE=100MB
+      - DB_PROD_WALLET_DIR=/wallet
+      - DB_PROD_WALLET_SERVICE=${DB_PROD_WALLET_SERVICE:-}
+      - DB_PROD_USER=${DB_PROD_USER:-}
+      - DB_PROD_PWD=${DB_PROD_PWD:-}
+    volumes:
+      - ${WALLET_LOCATION:-/wallet_not_set}:/wallet:ro
     ports:
       - "8080:8080"

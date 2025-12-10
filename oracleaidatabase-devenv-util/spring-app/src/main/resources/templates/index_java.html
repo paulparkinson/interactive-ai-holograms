@@ -1,0 +1,375 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Oracle Vector Search - Java Only</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        overflow: hidden;
+      }
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+      .header h1 {
+        font-size: 2em;
+        margin-bottom: 10px;
+      }
+      .header p {
+        opacity: 0.9;
+        font-size: 1.1em;
+      }
+      .badge {
+        display: inline-block;
+        background: rgba(255,255,255,0.2);
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.85em;
+        margin-left: 10px;
+      }
+      .content {
+        padding: 30px;
+      }
+      .section {
+        margin-bottom: 40px;
+        padding-bottom: 30px;
+        border-bottom: 2px solid #f0f0f0;
+      }
+      .section:last-child { border-bottom: none; }
+      .section h2 {
+        color: #667eea;
+        margin-bottom: 20px;
+        font-size: 1.5em;
+      }
+      .form-group {
+        margin-bottom: 15px;
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        color: #333;
+        font-weight: 500;
+      }
+      select {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #e0e0e0;
+        border-radius: 6px;
+        font-size: 1em;
+        transition: border-color 0.3s;
+      }
+      select:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+      button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 6px;
+        font-size: 1em;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+        font-weight: 500;
+      }
+      button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      }
+      button:active {
+        transform: translateY(0);
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .message {
+        margin-top: 15px;
+        padding: 15px;
+        border-radius: 6px;
+        animation: slideIn 0.3s;
+      }
+      @keyframes slideIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .success {
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+      }
+      .error {
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+      }
+      .info {
+        background: #d1ecf1;
+        border: 1px solid #bee5eb;
+        color: #0c5460;
+      }
+      .documents-list {
+        max-height: 400px;
+        overflow-y: auto;
+        margin-top: 15px;
+      }
+      .document-item {
+        background: #f8f9fa;
+        padding: 15px;
+        margin-bottom: 10px;
+        border-radius: 6px;
+        border-left: 4px solid #667eea;
+      }
+      .document-item h4 {
+        margin-bottom: 8px;
+        color: #333;
+      }
+      .document-item p {
+        font-size: 0.9em;
+        color: #666;
+        margin: 4px 0;
+      }
+      .document-preview {
+        background: white;
+        padding: 10px;
+        margin-top: 8px;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 0.85em;
+        color: #555;
+        max-height: 100px;
+        overflow-y: auto;
+      }
+      .spinner {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🔍 Oracle Vector Search<span class="badge">Java Only</span></h1>
+        <p>Database connection and document viewing using Java/JDBC</p>
+      </div>
+      
+      <div class="content">
+        <!-- Database Section -->
+        <div class="section">
+          <h2>💾 Database Connection</h2>
+          
+          <div class="form-group">
+            <label style="font-weight: 600;">Select Database:</label>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <select id="databaseSelect" style="flex: 1;">
+                <option value="">Loading...</option>
+              </select>
+              <button id="switchDbBtn" onclick="switchDatabase()">Connect</button>
+              <button onclick="testConnection()" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">Test</button>
+            </div>
+            <div id="currentDbInfo" style="margin-top: 8px; font-size: 0.9em; color: #666;"></div>
+          </div>
+          <div id="dbMessage"></div>
+        </div>
+
+        <!-- Documents Section -->
+        <div class="section">
+          <h2>📄 Documents</h2>
+          
+          <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <button onclick="loadDocuments()">
+              📋 Load All Documents
+            </button>
+            <button onclick="loadDocuments()" style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);">
+              🔄 Refresh
+            </button>
+          </div>
+          
+          <div id="documentsMessage"></div>
+          <div id="documentsCount" style="font-weight: 500; color: #666; margin-bottom: 10px;"></div>
+          <div id="documentsList" class="documents-list"></div>
+        </div>
+
+        <!-- Info Section -->
+        <div class="section">
+          <h2>ℹ️ About This Page</h2>
+          <p style="color: #666; line-height: 1.6;">
+            This is a simplified Java-only interface that connects directly to Oracle databases using JDBC.
+            It can successfully connect to Oracle Autonomous Database using wallet authentication.
+            <br><br>
+            <strong>Features:</strong>
+            <ul style="margin-left: 20px; margin-top: 10px;">
+              <li>✅ Connect to local Oracle Free or Autonomous Database (with wallet)</li>
+              <li>✅ View documents stored in the database</li>
+              <li>✅ Test database connections</li>
+              <li>⏳ For full vector search and RAG capabilities, use the <a href="/" style="color: #667eea;">main page</a></li>
+            </ul>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Load available databases
+      async function loadDatabases() {
+        try {
+          const response = await fetch('/api/databases');
+          const data = await response.json();
+          const select = document.getElementById('databaseSelect');
+          const infoDiv = document.getElementById('currentDbInfo');
+          
+          if (data.databases && data.databases.length > 0) {
+            select.innerHTML = '';
+            data.databases.forEach(db => {
+              const option = document.createElement('option');
+              option.value = db.name;
+              
+              if (db.wallet) {
+                option.textContent = `${db.name} (Wallet: ${db.service})`;
+              } else {
+                option.textContent = `${db.name} (local)`;
+              }
+              
+              if (db.is_active) {
+                option.selected = true;
+                if (db.wallet) {
+                  infoDiv.innerHTML = `📊 Connected to: <strong>${db.name}</strong> - Autonomous DB via wallet`;
+                } else {
+                  infoDiv.innerHTML = `📊 Connected to: <strong>${db.name}</strong> - Local Oracle`;
+                }
+              }
+              select.appendChild(option);
+            });
+          }
+        } catch (error) {
+          console.error('Failed to load databases:', error);
+          document.getElementById('databaseSelect').innerHTML = '<option value="default">default (local)</option>';
+        }
+      }
+      loadDatabases();
+
+      // Switch database
+      async function switchDatabase() {
+        const select = document.getElementById('databaseSelect');
+        const btn = document.getElementById('switchDbBtn');
+        const msg = document.getElementById('dbMessage');
+        const dbName = select.value;
+        
+        if (!dbName) return;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Connecting...';
+        msg.innerHTML = '';
+        
+        try {
+          const response = await fetch('/api/databases/switch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ database_name: dbName })
+          });
+          const data = await response.json();
+          
+          if (response.ok && data.success) {
+            msg.innerHTML = `<div class="message success">✓ ${data.message}</div>`;
+            loadDatabases();
+            setTimeout(() => msg.innerHTML = '', 3000);
+          } else {
+            msg.innerHTML = `<div class="message error">✗ ${data.error || 'Connection failed'}</div>`;
+          }
+        } catch (error) {
+          msg.innerHTML = `<div class="message error">✗ Error: ${error.message}</div>`;
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = 'Connect';
+        }
+      }
+
+      // Test connection
+      async function testConnection() {
+        const msg = document.getElementById('dbMessage');
+        msg.innerHTML = '<div class="message info">⏳ Testing connection...</div>';
+        
+        try {
+          const response = await fetch('/api/databases/test');
+          const data = await response.json();
+          
+          if (response.ok && data.success) {
+            msg.innerHTML = `<div class="message success">✓ Connection OK - Connected to <strong>${data.database}</strong></div>`;
+            setTimeout(() => msg.innerHTML = '', 3000);
+          } else {
+            msg.innerHTML = `<div class="message error">✗ ${data.error || 'Connection test failed'}</div>`;
+          }
+        } catch (error) {
+          msg.innerHTML = `<div class="message error">✗ Error: ${error.message}</div>`;
+        }
+      }
+
+      // Load documents
+      async function loadDocuments() {
+        const msg = document.getElementById('documentsMessage');
+        const count = document.getElementById('documentsCount');
+        const list = document.getElementById('documentsList');
+        
+        msg.innerHTML = '<div class="message info">⏳ Loading documents...</div>';
+        list.innerHTML = '';
+        count.innerHTML = '';
+        
+        try {
+          const response = await fetch('/api/databases/documents');
+          const data = await response.json();
+          
+          if (response.ok && data.success) {
+            msg.innerHTML = '';
+            
+            if (data.documents && data.documents.length > 0) {
+              count.innerHTML = `Found <strong>${data.count}</strong> document chunks in <strong>${data.database}</strong> database`;
+              
+              data.documents.forEach(doc => {
+                const item = document.createElement('div');
+                item.className = 'document-item';
+                item.innerHTML = `
+                  <h4>📄 ${doc.name} ${doc.chunk_index > 0 ? `(chunk ${doc.chunk_index})` : ''}</h4>
+                  <p><strong>ID:</strong> ${doc.id}</p>
+                  <p><strong>Text Length:</strong> ${doc.text_length} characters</p>
+                  <div class="document-preview">
+                    ${doc.text_preview || 'No preview available'}${doc.text_length > 200 ? '...' : ''}
+                  </div>
+                `;
+                list.appendChild(item);
+              });
+            } else {
+              msg.innerHTML = `<div class="message info">ℹ️ No documents found in <strong>${data.database}</strong> database</div>`;
+            }
+          } else {
+            msg.innerHTML = `<div class="message error">✗ ${data.error || 'Failed to load documents'}</div>`;
+          }
+        } catch (error) {
+          msg.innerHTML = `<div class="message error">✗ Error: ${error.message}</div>`;
+        }
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+opencv-python
+mediapipe
+pandas 
+cvzone
+numpy
+scikit-learn
+pillow
+hsemotion
+torch
+torchvision
+timm   

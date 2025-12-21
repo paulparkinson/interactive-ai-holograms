@@ -1,0 +1,20 @@
+# Large training data files
+data.csv
+data_old.csv
+model.pkl
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# DeepFace model cache
+.deepface/
+
+# Virtual environment
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/

@@ -20,16 +20,13 @@ import java.util.concurrent.ConcurrentMap;
  */
 public class TTSCoquiEnhanced {
     
-    // Python 3.11 executable path - use environment variable or detect current user
-    private static final String PYTHON_311_PATH = System.getenv("PYTHON_PATH") != null ? 
-        System.getenv("PYTHON_PATH") : 
-        "C:\\Users\\" + System.getProperty("user.name") + "\\AppData\\Local\\Programs\\Python\\Python311\\python.exe";
+    // Python 3.11 executable path - use centralized configuration
+    private static final String PYTHON_311_PATH = Configuration.getPythonPath();
     
     // TTS script path
     private static final String COQUI_TTS_SCRIPT = "coqui_tts_integration.py";
 
-    private static final boolean COQUI_VERBOSE_LOGS = Boolean.parseBoolean(
-        System.getenv().getOrDefault("COQUI_TTS_VERBOSE", "false"));
+    private static final boolean COQUI_VERBOSE_LOGS = Configuration.isCoquiTtsVerbose();
     
     // TTS quality modes
     public enum TTSQuality {
@@ -46,6 +43,7 @@ public class TTSCoquiEnhanced {
         }
 
         public String getEffectiveModel() {
+            // Note: Still using System.getenv for model overrides as these are advanced settings
             String override = System.getenv(overrideEnvVar);
             if (override != null && !override.isBlank()) {
                 return override;
@@ -204,8 +202,8 @@ public class TTSCoquiEnhanced {
     public static void TTS(String fileName, String text, String languageCode, String voicename) throws Exception {
         System.out.println("Enhanced TTS - generating audio for: " + text);
         
-        // Determine quality based on environment or default to BALANCED
-        String qualityEnv = System.getenv("TTS_QUALITY");
+        // Determine quality based on centralized configuration
+        String qualityEnv = Configuration.getTtsQuality();
         TTSQuality quality = TTSQuality.BALANCED; // Default
         
         if (qualityEnv != null) {

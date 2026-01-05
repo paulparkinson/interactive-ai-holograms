@@ -41,6 +41,7 @@ public class OracleDocAgent implements Agent {
     
     // Oracle model configuration - should match the model imported via Python app.py
     // Python app.py uses "all_MiniLM_L12_v2" and converts to uppercase: "ALL_MINILM_L12_V2"
+    // Note: Using System.getenv directly for advanced/specialized configuration
     private static final String ORACLE_MODEL_NAME = System.getenv().getOrDefault("ORACLE_MODEL_NAME", "ALL_MINILM_L12_V2");
     
     // Getter and setter for similarity threshold

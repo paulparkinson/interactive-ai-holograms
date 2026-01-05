@@ -1,6 +1,9 @@
 spring:
   main:
     allow-circular-references: true
+  autoconfigure:
+    exclude:
+      - com.oracle.cloud.spring.autoconfigure.core.CredentialsProviderAutoConfiguration
   security:
     user:
       name: oracleai

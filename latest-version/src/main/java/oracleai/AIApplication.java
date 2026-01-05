@@ -8,16 +8,16 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class AIApplication {
 
-    public static final String COMPARTMENT_ID = System.getenv("COMPARTMENT_ID");
-    public static final String OBJECTSTORAGE_NAMESPACE = System.getenv("OBJECTSTORAGE_NAMESPACE");
-    public static final String OBJECTSTORAGE_BUCKETNAME = System.getenv("OBJECTSTORAGE_BUCKETNAME");
-    public static final String ORDS_ENDPOINT_URL = System.getenv("ORDS_ENDPOINT_URL");
-    public static final String ORDS_OMLOPSENDPOINT_URL= System.getenv("ORDS_ENDPOINT_URL") + "/omlopsuser/";
-    public static final String OCI_VISION_SERVICE_ENDPOINT = System.getenv("OCI_VISION_SERVICE_ENDPOINT");
-    public static final String OCICONFIG_FILE = System.getenv("OCICONFIG_FILE");
-    public static final String OCICONFIG_PROFILE = System.getenv("OCICONFIG_PROFILE");
-    public static final String DIGITAL_DOUBLES_IMAGES_ENDPOINT = System.getenv("DIGITAL_DOUBLES_IMAGES_ENDPOINT");
-    public static final String THREEDEY = System.getenv("THREED_KEY");
+    public static final String COMPARTMENT_ID = oracleai.aiholo.Configuration.getCompartmentId();
+    public static final String OBJECTSTORAGE_NAMESPACE = oracleai.aiholo.Configuration.getObjectStorageNamespace();
+    public static final String OBJECTSTORAGE_BUCKETNAME = oracleai.aiholo.Configuration.getObjectStorageBucketName();
+    public static final String ORDS_ENDPOINT_URL = oracleai.aiholo.Configuration.getOrdsEndpointUrl();
+    public static final String ORDS_OMLOPSENDPOINT_URL = oracleai.aiholo.Configuration.getOrdsOmlOpsEndpointUrl();
+    public static final String OCI_VISION_SERVICE_ENDPOINT = oracleai.aiholo.Configuration.getOciVisionServiceEndpoint();
+    public static final String OCICONFIG_FILE = oracleai.aiholo.Configuration.getOciConfigFile();
+    public static final String OCICONFIG_PROFILE = oracleai.aiholo.Configuration.getOciConfigProfile();
+    public static final String DIGITAL_DOUBLES_IMAGES_ENDPOINT = oracleai.aiholo.Configuration.getDigitalDoublesImagesEndpoint();
+    public static final String THREEDEY = oracleai.aiholo.Configuration.getThreeDKey();
 
     static {
         System.out.println("AIApplication.static initializer COMPARTMENT_ID:" + COMPARTMENT_ID);

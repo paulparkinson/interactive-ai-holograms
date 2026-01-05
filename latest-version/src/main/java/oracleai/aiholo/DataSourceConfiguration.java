@@ -15,10 +15,10 @@ public class DataSourceConfiguration {
     public DataSource dataSource() throws SQLException {
         OracleDataSource dataSource = new OracleDataSource();
         
-        // Get database configuration from environment variables
-        String dbUser = System.getenv("DB_USER");
-        String dbPassword = System.getenv("DB_PASSWORD");
-        String dbUrl = System.getenv("DB_URL");
+        // Get database configuration from centralized Configuration class
+        String dbUser = oracleai.aiholo.Configuration.getDbUser();
+        String dbPassword = oracleai.aiholo.Configuration.getDbPassword();
+        String dbUrl = oracleai.aiholo.Configuration.getDbUrl();
         
         if (dbUser == null || dbPassword == null || dbUrl == null) {
             throw new RuntimeException("Database configuration missing. Please set DB_USER, DB_PASSWORD, and DB_URL environment variables.");

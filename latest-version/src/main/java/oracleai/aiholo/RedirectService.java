@@ -11,8 +11,7 @@ import oracleai.common.GetSetController;
 @Service
 public class RedirectService {
 
-    private static final boolean REDIRECT_ANSWER =
-            Boolean.parseBoolean(System.getenv().getOrDefault("REDIRECT_ANSWER", "true"));
+    private static final boolean REDIRECT_ANSWER = Configuration.isRedirectAnswerEnabled();
 
     /**
      * Execute redirect - stores answer parameters as JSON in GetSetController instead of playing audio

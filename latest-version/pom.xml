@@ -68,6 +68,12 @@
 			<groupId>com.oracle.cloud.spring</groupId>
 			<artifactId>spring-cloud-oci-starter</artifactId>
 			<version>1.4.0</version>
+			<exclusions>
+				<exclusion>
+					<groupId>com.oracle.cloud.spring</groupId>
+					<artifactId>spring-cloud-oci-autoconfigure</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>com.oracle.oci.sdk</groupId>
@@ -205,18 +211,25 @@
       <groupId>com.google.cloud</groupId>
       <artifactId>google-cloud-speech</artifactId>
     </dependency>
+    <dependency>
+      <groupId>com.google.cloud</groupId>
+      <artifactId>google-cloud-language</artifactId>
+    </dependency>
    <dependency>
       <groupId>net.sourceforge.argparse4j</groupId>
       <artifactId>argparse4j</artifactId>
       <version>0.9.0</version>
     </dependency>
+    <dependency>
+      <groupId>ai.picovoice</groupId>
+      <artifactId>porcupine-java</artifactId>
+      <version>4.0.1</version>
+    </dependency>
 
-
-   <dependency>
+    <dependency>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-websocket</artifactId>
     </dependency>
-
 
     <dependency>
       <groupId>commons-cli</groupId>
@@ -265,14 +278,28 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+				<configuration>
+					<systemPropertyVariables>
+						<spring.cloud.oci.enabled>false</spring.cloud.oci.enabled>
+					</systemPropertyVariables>
+				</configuration>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<configuration><source>11</source><target>11</target></configuration>
 			</plugin>
+		<plugin>
+			<groupId>org.apache.maven.plugins</groupId>
+			<artifactId>maven-clean-plugin</artifactId>
+			<version>3.3.2</version>
+			<configuration>
+				<retryOnError>true</retryOnError>
+				<failOnError>false</failOnError>
+			</configuration>
+		</plugin>
 
-		</plugins>
-	</build>
+	</plugins>
+</build>
 
 </project>

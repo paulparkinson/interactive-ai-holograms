@@ -13,8 +13,8 @@ import org.json.JSONObject;
 public class ChatGPTService {
     
     private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-    private static final String OPENAI_API_KEY = System.getenv("OPENAI_API_KEY");
-    private static final String DEFAULT_MODEL = System.getenv().getOrDefault("OPENAI_MODEL", "gpt-4");
+    private static final String OPENAI_API_KEY = Configuration.getOpenAiApiKey();
+    private static final String DEFAULT_MODEL = Configuration.getOpenAiModel();
     
     /**
      * Send a query directly to ChatGPT and return the response

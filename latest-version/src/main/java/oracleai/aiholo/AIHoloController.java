@@ -57,167 +57,47 @@ import java.util.*;
 public class AIHoloController {
     
     @Autowired
+    private AgentService agentService;
+    
+    @Autowired
     private ChatGPTService chatGPTService;
+    
+    @Autowired
+    private AudioOutputService audioOutputService;
     
     private String theValue = "mirrorme";
     private static final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-    private static final String SANDBOX_API_URL = System.getenv("SANDBOX_API_URL");
-    private static final String AI_OPTIMZER = System.getenv("AI_OPTIMZER");
-    private static final String OPENAI_KEY = System.getenv("OPENAI_KEY");
-    private static final String OCI_VISION_ENDPOINT = System.getenv("OCI_VISION_ENDPOINT");
-    private static final String OCI_COMPARTMENT_ID = System.getenv("OCI_COMPARTMENT_ID");
-    private static final String OCI_API_KEY = System.getenv("OCI_API_KEY");
+    private static final String SANDBOX_API_URL = Configuration.getSandboxApiUrl();
+    private static final String AI_OPTIMZER = Configuration.getAiOptimizer();
+    private static final String OPENAI_KEY = Configuration.getOpenAiKey();
+    private static final String OCI_VISION_ENDPOINT = Configuration.getOciVisionEndpoint();
+    private static final String OCI_COMPARTMENT_ID = Configuration.getOciCompartmentId();
+    private static final String OCI_API_KEY = Configuration.getOciApiKey();
     // Langflow API configuration. These environment variables should be set
     // when deploying the application. LANGFLOW_SERVER_URL is the base URL for
     // the Langflow server (for example, http://host:7860/api), FLOW_ID is the
     // ID of the flow you wish to call, and LANGFLOW_API_KEY is your API key.
-    private static final String LANGFLOW_SERVER_URL = System.getenv("LANGFLOW_SERVER_URL");
-    private static final String LANGFLOW_FLOW_ID = System.getenv("LANGFLOW_FLOW_ID");
-    private static final String LANGFLOW_API_KEY = System.getenv("LANGFLOW_API_KEY");
-    static final String AUDIO_DIR_PATH = System.getenv("AUDIO_DIR_PATH");
-    private static final String OUTPUT_FILE_PATH = System.getenv("OUTPUT_FILE_PATH");
-    private static final String AIHOLO_HOST_URL = System.getenv("AIHOLO_HOST_URL");
+    private static final String LANGFLOW_SERVER_URL = Configuration.getLangflowServerUrl();
+    private static final String LANGFLOW_FLOW_ID = Configuration.getLangflowFlowId();
+    private static final String LANGFLOW_API_KEY = Configuration.getLangflowApiKey();
+    static final String AUDIO_DIR_PATH = Configuration.getAudioDirPath();
+    private static final String OUTPUT_FILE_PATH = Configuration.getOutputFilePath();
+    private static final String AIHOLO_HOST_URL = Configuration.getAiholoHostUrl();
     private static final AtomicBoolean AUDIO2FACE_ENABLED =
-            new AtomicBoolean(Boolean.parseBoolean(System.getenv("IS_AUDIO2FACE")));
-    private static final boolean REDIRECT_ANSWER = 
-            Boolean.parseBoolean(System.getenv().getOrDefault("REDIRECT_ANSWER", "false"));
-    private static final boolean POLL_FOR_ANSWERS = 
-            Boolean.parseBoolean(System.getenv().getOrDefault("POLL_FOR_ANSWERS", "false"));
-    private static final String POLL_SERVER_URL = 
-            System.getenv().getOrDefault("POLL_SERVER_URL", "https://localhost:443");
-    private static final String POLL_USERNAME = 
-            System.getenv().getOrDefault("POLL_USERNAME", "oracleai");
-    private static final String POLL_PASSWORD = 
-            System.getenv().getOrDefault("POLL_PASSWORD", "oracleai");
-    private static final int POLL_INTERVAL_MS = 
-            Integer.parseInt(System.getenv().getOrDefault("POLL_INTERVAL_MS", "1000"));
-    private static int audioDelayMs = 500; // Default delay between dual audio outputs in milliseconds
+            new AtomicBoolean(Configuration.isAudio2FaceEnabled());
+    private static final boolean REDIRECT_ANSWER = Configuration.isRedirectAnswerEnabled();
+    private static final boolean POLL_FOR_ANSWERS = Configuration.isPollForAnswersEnabled();
+    private static final String POLL_SERVER_URL = Configuration.getPollServerUrl();
+    private static final String POLL_USERNAME = Configuration.getPollUsername();
+    private static final String POLL_PASSWORD = Configuration.getPollPassword();
+    private static final int POLL_INTERVAL_MS = Configuration.getPollIntervalMs();
     private static boolean enableIntroAudio = false; // Set to false to disable random intro sounds
-    private static boolean enableDualAudioOutput = true; // Set to true to enable dual audio output
     
     // Polling client instance
     private static PollingClient pollingClient;
-    
-    // Configurable audio output devices
-    private static String audioDeviceA = "CABLE Input (VB-Audio Virtual Cable)"; // Java Stream A → Unreal
-    private static String audioDeviceB = "Speakers (VB-Audio Voicemeeter VAIO)"; // Java Stream B → Zoom
 
-    // Agent registration system
-    private static final List<Agent> registeredAgents = new ArrayList<>();
-    
-    static {
-        // Register agents at startup (order matters - first match wins)
-        registerAgent(new MirrorMeAgent(OUTPUT_FILE_PATH));
-        registerAgent(new DigitalTwinAgent(OUTPUT_FILE_PATH));
-        registerAgent(new SignAgent(OUTPUT_FILE_PATH));
-        registerAgent(new VisionAIAgent(OCI_VISION_ENDPOINT, OCI_COMPARTMENT_ID, OCI_API_KEY));
-        registerAgent(new AIToolkitAgent(SANDBOX_API_URL, AI_OPTIMZER));
-        registerAgent(new FinancialAgent(LANGFLOW_SERVER_URL, LANGFLOW_FLOW_ID, LANGFLOW_API_KEY));
-        registerAgent(new GamerAgent(OPENAI_KEY));
-        // OptimizerToolkitAgent commented out - backend not working
-        // registerAgent(new OptimizerToolkitAgent(SANDBOX_API_URL, AI_OPTIMZER));
-        // DirectLLMAgent is the preferred fallback if OpenAI key is available
-        registerAgent(new DirectLLMAgent(OPENAI_KEY));
-        // DefaultFallbackAgent is always available as final fallback
-        registerAgent(new DefaultFallbackAgent());
-    }
-
-    /**
-     * Register an agent to handle specific types of questions.
-     * Agents are checked in registration order.
-     */
-    public static void registerAgent(Agent agent) {
-        if (agent.isConfigured()) {
-            registeredAgents.add(agent);
-            System.out.println("Registered agent: " + agent.getName());
-        } else {
-            System.out.println("Skipping agent (not configured): " + agent.getName());
-        }
-    }
-
-    /**
-     * Find an agent that can handle the given question based on keyword matching.
-     * @param question The normalized (lowercase) question
-     * @return The matching agent, or null if no match
-     */
-    private static Agent findAgentForQuestion(String question) {
-        Agent fallbackAgent = null;
-        
-        for (Agent agent : registeredAgents) {
-            String[][] keywords = agent.getKeywords();
-            
-            // If agent has no keywords, it's a fallback agent (like DirectLLMAgent)
-            if (keywords.length == 0) {
-                fallbackAgent = agent;
-                continue;
-            }
-            
-            // Check if any keyword set matches
-            for (String[] keywordSet : keywords) {
-                boolean allMatch = true;
-                for (String keyword : keywordSet) {
-                    if (!question.contains(keyword.toLowerCase())) {
-                        allMatch = false;
-                        break;
-                    }
-                }
-                if (allMatch) {
-                    return agent;
-                }
-            }
-        }
-        
-        // If no specific agent matched, return the fallback agent
-        return fallbackAgent;
-    }
-    
-    /**
-     * Strip trigger keywords from the question before passing to agent
-     */
-    private static String stripTriggerKeywords(String question, Agent agent) {
-        if (agent == null) return question;
-        
-        String cleanQuestion = question;
-        String[][] keywords = agent.getKeywords();
-        
-        // Find the matching keyword set and remove those keywords
-        for (String[] keywordSet : keywords) {
-            boolean allMatch = true;
-            String lowerQuestion = question.toLowerCase();
-            for (String keyword : keywordSet) {
-                if (!lowerQuestion.contains(keyword.toLowerCase())) {
-                    allMatch = false;
-                    break;
-                }
-            }
-            
-            // If this keyword set matched, remove these keywords
-            if (allMatch) {
-                System.out.println("DEBUG: Matched keyword set: " + java.util.Arrays.toString(keywordSet));
-                for (String keyword : keywordSet) {
-                    // Simple case-insensitive replacement
-                    // First try with spaces around it, then without
-                    String pattern1 = "(?i)\\s+" + keyword + "\\s+";
-                    String pattern2 = "(?i)\\s+" + keyword + "(?=\\b|$)";
-                    String pattern3 = "(?i)(?<=^|\\b)" + keyword + "\\s+";
-                    String pattern4 = "(?i)\\b" + keyword + "\\b";
-                    
-                    cleanQuestion = cleanQuestion.replaceAll(pattern1, " ");
-                    cleanQuestion = cleanQuestion.replaceAll(pattern2, " ");
-                    cleanQuestion = cleanQuestion.replaceAll(pattern3, " ");
-                    cleanQuestion = cleanQuestion.replaceAll(pattern4, " ");
-                    
-                    System.out.println("DEBUG: After removing '" + keyword + "': '" + cleanQuestion + "'");
-                }
-                break;
-            }
-        }
-        
-        // Clean up extra whitespace and trim
-        cleanQuestion = cleanQuestion.replaceAll("\\s+", " ").trim();
-        
-        return cleanQuestion;
-    }
+    // Agent management now handled by AgentService
+    // Static initialization removed - agents managed by injected AgentService
 
     // Audio2Face support removed - always play locally
     static boolean isAudio2FaceEnabled() {
@@ -240,8 +120,7 @@ public class AIHoloController {
     }
     
     // TTS Engine Configuration - GCP is the default for reliability
-    private static final String TTS_ENGINE = System.getenv("TTS_ENGINE") != null ? 
-        System.getenv("TTS_ENGINE").toUpperCase() : "GCP";
+    private static final String TTS_ENGINE = Configuration.getTtsEngine();
     
     // TTS Engine Options
     public enum TTSEngine {
@@ -424,17 +303,11 @@ public class AIHoloController {
                                 String aiPipelineLabel, double aiDurationMillis, TTSSelection ttsSelection,
                                 boolean audio2FaceEnabled) {
         try {
-            // Use local defaults for audio configuration
             String fileName = "polled_output.wav";
-            boolean enableDualAudio = AIHoloController.enableDualAudioOutput;
-            String deviceA = AIHoloController.audioDeviceA;
-            String deviceB = AIHoloController.audioDeviceB;
-            int delayMs = AIHoloController.audioDelayMs;
             
-            // Generate and play TTS using existing method
+            // Generate and play TTS using existing method (audio config from Configuration class)
             generateAndPlayTts(fileName, textToSay, languageCode, voiceName,
-                aiPipelineLabel, aiDurationMillis, ttsSelection, audio2FaceEnabled,
-                enableDualAudio, deviceA, deviceB, delayMs);
+                aiPipelineLabel, aiDurationMillis, ttsSelection, audio2FaceEnabled);
                 
         } catch (Exception e) {
             System.err.println("Error playing polled answer: " + e.getMessage());
@@ -455,16 +328,8 @@ public class AIHoloController {
      * Register agents that require Spring-managed dependencies (DataSource, ChatGPTService)
      * This runs after Spring completes dependency injection
      */
-    @PostConstruct
-    public void registerSpringDependentAgents() {
-        // Register OracleDocAgent with injected dataSource and chatGPTService
-        if (dataSource != null && chatGPTService != null) {
-            System.out.println("Registering OracleDocAgent with database connection");
-            registerAgent(new OracleDocAgent(dataSource, chatGPTService));
-        } else {
-            System.out.println("OracleDocAgent not registered - DataSource or ChatGPTService not available");
-        }
-    }
+    // Agent registration now handled by AgentService
+    // OracleDocAgent is automatically registered with DataSource and ChatGPTService dependencies
 
     @SuppressWarnings("unused")
     private void startInactivityMonitor() {
@@ -497,11 +362,11 @@ public class AIHoloController {
         String resolvedVoice = resolveFemaleVoice(languageCode);
         model.addAttribute("voiceName", resolvedVoice);
         
-        // Add dual audio configuration attributes
-        model.addAttribute("audioDelayMs", audioDelayMs);
-        model.addAttribute("enableDualAudioOutput", enableDualAudioOutput);
-        model.addAttribute("audioDeviceA", audioDeviceA);
-        model.addAttribute("audioDeviceB", audioDeviceB);
+        // Add dual audio configuration attributes from Configuration class
+        model.addAttribute("audioDelayMs", Configuration.getAudioDelayMs());
+        model.addAttribute("enableDualAudioOutput", Configuration.isEnableDualAudioOutput());
+        model.addAttribute("audioDeviceA", Configuration.getAudioDeviceA());
+        model.addAttribute("audioDeviceB", Configuration.getAudioDeviceB());
         
         return "aiholo";
     }
@@ -525,17 +390,10 @@ public class AIHoloController {
             return "Error writing to file: " + e.getMessage();
         }
         
-        // Direct audio playbook using passed parameters
-        System.out.println("EXPLAINER: Playing to Device A (" + audioDeviceA + "): explainer.wav");
-        TTSCoquiEnhanced.playAudioFileToDevice("explainer.wav", audioDeviceA);
-        if (enableDualAudio) {
-            System.out.println("EXPLAINER: Dual audio enabled - waiting " + audioDelayMs + "ms before playing to Device B (" + audioDeviceB + ")");
-            try { Thread.sleep(audioDelayMs); } catch (InterruptedException e) { }
-            System.out.println("EXPLAINER: Now playing to Device B after " + audioDelayMs + "ms delay");
-            TTSCoquiEnhanced.playAudioFileToDevice("explainer.wav", audioDeviceB);
-        } else {
-            System.out.println("EXPLAINER: Dual audio disabled - only playing to Device A");
-        }
+        // Use AudioOutputService for dual audio playback
+        System.out.println("EXPLAINER: Playing explainer.wav via AudioOutputService");
+        audioOutputService.playAudioToDualOutputs("explainer.wav", AUDIO_DIR_PATH);
+
 
         return "Explained";
     }
@@ -584,25 +442,20 @@ public class AIHoloController {
         TTSSelection ttsSelection = TTSSelection.fromParam(ttsModeParam);
         System.out.println("Requested TTS mode: " + ttsSelection.name());
         
-        // Handle audio configuration parameters
+        // Note: Audio configuration parameters (audioDelayMs, enableDualAudio, audioDeviceA/B) 
+        // are now configured via .env file and loaded through Configuration class
+        // Request parameters are deprecated but kept for backward compatibility logging
         if (audioDelayMs != null) {
-            int previousDelay = AIHoloController.audioDelayMs;
-            AIHoloController.audioDelayMs = audioDelayMs;
-            System.out.println("Audio delay updated from parameter: " + audioDelayMs + "ms (was: " + previousDelay + "ms)");
+            System.out.println("WARNING: audioDelayMs parameter is deprecated. Configure via AUDIO_DELAY_MS in .env file. Requested: " + audioDelayMs + "ms, Using: " + Configuration.getAudioDelayMs() + "ms");
         }
         if (enableDualAudio != null) {
-            AIHoloController.enableDualAudioOutput = enableDualAudio;
-            System.out.println("Dual audio output " + (enableDualAudio ? "enabled" : "disabled"));
-        } else {
-            System.out.println("Using existing dual audio setting: " + AIHoloController.enableDualAudioOutput);
+            System.out.println("WARNING: enableDualAudio parameter is deprecated. Configure via ENABLE_DUAL_AUDIO_OUTPUT in .env file. Requested: " + enableDualAudio + ", Using: " + Configuration.isEnableDualAudioOutput());
         }
         if (audioDeviceAParam != null && !audioDeviceAParam.trim().isEmpty()) {
-            AIHoloController.audioDeviceA = audioDeviceAParam;
-            System.out.println("Audio Device A (Stream A → Unreal) set to: " + audioDeviceAParam);
+            System.out.println("WARNING: audioDeviceA parameter is deprecated. Configure via AUDIO_DEVICE_A in .env file. Requested: " + audioDeviceAParam + ", Using: " + Configuration.getAudioDeviceA());
         }
         if (audioDeviceBParam != null && !audioDeviceBParam.trim().isEmpty()) {
-            AIHoloController.audioDeviceB = audioDeviceBParam;
-            System.out.println("Audio Device B (Stream B → Zoom) set to: " + audioDeviceBParam);
+            System.out.println("WARNING: audioDeviceB parameter is deprecated. Configure via AUDIO_DEVICE_B in .env file. Requested: " + audioDeviceBParam + ", Using: " + Configuration.getAudioDeviceB());
         }
         
         final boolean audio2FaceEnabled = false; // Audio2Face removed - always false
@@ -715,29 +568,20 @@ public class AIHoloController {
         else answer = "I'm sorry. I couldn't find an answer in the database";
         
         if (true) {
-            // Check if any registered agent can handle this question
-            Agent matchingAgent = findAgentForQuestion(normalized);
-            System.out.println("Agent search for '" + normalized + "': " + 
-                (matchingAgent != null ? matchingAgent.getName() : "null"));
-            
-            // Strip trigger keywords BEFORE adding instructions
+            // Use AgentService to process the question
             String processedQuestion = question.replace("use vectorrag", "").trim();
-            if (matchingAgent != null) {
-                System.out.println("DEBUG: Before stripping: '" + processedQuestion + "'");
-                System.out.println("DEBUG: Agent keywords: " + java.util.Arrays.deepToString(matchingAgent.getKeywords()));
-                processedQuestion = stripTriggerKeywords(processedQuestion, matchingAgent);
-                System.out.println("DEBUG: After stripping: '" + processedQuestion + "'");
-            }
-            
-            // Now add the instruction suffix
             processedQuestion += ". Respond in 25 words or less. " + aiholo_prompt_additions;
             
             long aiStartNs = System.nanoTime();
-            if (matchingAgent != null) {
-                aiPipelineLabel = matchingAgent.getName();
-                // Write agent value name to output file
-                theValue = matchingAgent.getValueName();
-                System.out.println("---------APPROPRIATE AGENT FOUND: " + matchingAgent.getName() + " writing value: " + theValue + " to file");
+            AgentService.AgentResponse agentResponse = agentService.processQuestion(question, 25);
+            aiDurationMillis = (System.nanoTime() - aiStartNs) / 1_000_000.0;
+            
+            if (agentResponse != null) {
+                aiPipelineLabel = agentResponse.getAgentName();
+                answer = agentResponse.getAnswer();
+                theValue = agentResponse.getValueName();
+                
+                System.out.println("---------AGENT USED: " + agentResponse.getAgentName() + " writing value: " + theValue + " to file");
                 try (FileWriter writer = new FileWriter(filePath)) {
                     JSONObject json = new JSONObject();
                     json.put("data", theValue);
@@ -747,13 +591,7 @@ public class AIHoloController {
                 } catch (IOException e) {
                     System.err.println("Error writing agent name to file: " + e.getMessage());
                 }
-                
-                System.out.println("Original question: " + question);
-                System.out.println("Cleaned question for agent: " + processedQuestion);
-                
-                answer = matchingAgent.processQuestion(processedQuestion);
             }
-            aiDurationMillis = (System.nanoTime() - aiStartNs) / 1_000_000.0;
 
         } else {
             if (true) {
@@ -796,12 +634,8 @@ public class AIHoloController {
             if (REDIRECT_ANSWER) {
                 executeRedirect(answer, languageCode, voicename, aiPipelineLabel, aiDurationMillis, ttsSelection, audio2FaceEnabled);
             } else {
-                // Pass dual audio configuration parameters directly from the /play method parameters
-                boolean dualAudioEnabled = (enableDualAudio != null) ? enableDualAudio : AIHoloController.enableDualAudioOutput;
-                String deviceA = (audioDeviceAParam != null && !audioDeviceAParam.trim().isEmpty()) ? audioDeviceAParam : AIHoloController.audioDeviceA;
-                String deviceB = (audioDeviceBParam != null && !audioDeviceBParam.trim().isEmpty()) ? audioDeviceBParam : AIHoloController.audioDeviceB;
-                int delay = (audioDelayMs != null) ? audioDelayMs : AIHoloController.audioDelayMs;
-                generateAndPlayTts(fileName, answer, languageCode, voicename, aiPipelineLabel, aiDurationMillis, ttsSelection, audio2FaceEnabled, dualAudioEnabled, deviceA, deviceB, delay);
+                // Audio configuration now comes from Configuration class (loaded from .env)
+                generateAndPlayTts(fileName, answer, languageCode, voicename, aiPipelineLabel, aiDurationMillis, ttsSelection, audio2FaceEnabled);
             }
         } catch (Exception e) {
             System.err.println("Requested TTS mode failed completely: " + e.getMessage());
@@ -1011,7 +845,7 @@ public class AIHoloController {
         }
         
         // Find the VisionAIAgent
-        for (Agent agent : registeredAgents) {
+        for (Agent agent : agentService.getRegisteredAgents()) {
             if (agent instanceof VisionAIAgent) {
                 VisionAIAgent visionAgent = (VisionAIAgent) agent;
                 if (!visionAgent.isConfigured()) {
@@ -1068,10 +902,7 @@ public class AIHoloController {
             if (audio2FaceParam != null) {
                 setAudio2FaceEnabled(audio2FaceParam);
             }
-            if (audioDelayMs != null) {
-                AIHoloController.audioDelayMs = audioDelayMs;
-                System.out.println("Audio delay set to: " + audioDelayMs + "ms");
-            }
+            // Note: audioDelayMs parameter is deprecated - use AUDIO_DELAY_MS in .env file instead
             boolean audio2FaceEnabled = isAudio2FaceEnabled();
             theValue = "question";
             String filePath = OUTPUT_FILE_PATH != null ? OUTPUT_FILE_PATH : "aiholo_output.txt";
@@ -1087,8 +918,7 @@ public class AIHoloController {
                 executeRedirect(answer, languageCode, voicename, "Manual playback", 0.0, ttsSelection, audio2FaceEnabled);
             } else {
                 generateAndPlayTts("output.wav", answer, languageCode, voicename,
-                    "Manual playback", 0.0, ttsSelection, audio2FaceEnabled, 
-                    AIHoloController.enableDualAudioOutput, AIHoloController.audioDeviceA, AIHoloController.audioDeviceB, audioDelayMs);
+                    "Manual playback", 0.0, ttsSelection, audio2FaceEnabled);
             }
             return "OK";
         } catch (Exception e) {
@@ -1126,7 +956,7 @@ public class AIHoloController {
 
     private void generateAndPlayTts(String fileName, String textToSay, String languageCode, String voiceName,
                                     String aiPipelineLabel, double aiDurationMillis, TTSSelection requestedMode,
-                                    boolean audio2FaceEnabled, boolean enableDualAudio, String deviceA, String deviceB, int delayMs) throws Exception {
+                                    boolean audio2FaceEnabled) throws Exception {
         String safeText = (textToSay == null || textToSay.isBlank()) ? " " : textToSay;
         TTSSelection currentSelection = (requestedMode != null) ? requestedMode : TTSSelection.defaultSelection();
         Exception lastError = null;
@@ -1144,18 +974,9 @@ public class AIHoloController {
                                 ttsDurationMillis,
                                 true,
                                 currentSelection.getDisplayLabel()));
-                // Java Stream A → Unreal (CABLE device)
-                System.out.println("Playing audio to Device A (" + deviceA + "): " + fileName);
-                TTSCoquiEnhanced.playAudioFileToDevice(fileName, deviceA);
-                if (enableDualAudio) {
-                    // Wait for delay then play Java Stream B → Zoom (Voicemeeter VAIO)
-                    System.out.println("Dual audio enabled - waiting " + delayMs + "ms before playing to Device B (" + deviceB + ")");
-                    try { Thread.sleep(delayMs); } catch (InterruptedException e) { }
-                    System.out.println("Now playing to Device B after " + delayMs + "ms delay");
-                    TTSCoquiEnhanced.playAudioFileToDevice(fileName, deviceB);
-                } else {
-                    System.out.println("Dual audio disabled - only playing to Device A");
-                }
+                // Use AudioOutputService for dual audio playback
+                System.out.println("Playing audio via AudioOutputService: " + fileName);
+                audioOutputService.playAudioToDualOutputs(fileName, AUDIO_DIR_PATH);
                 return;
             } catch (Exception error) {
                 double elapsedMillis = (System.nanoTime() - ttsStartNs) / 1_000_000.0;
@@ -1185,8 +1006,7 @@ public class AIHoloController {
                                                 TTSSelection requestedMode, boolean audio2FaceEnabled) throws Exception {
         AIHoloController tempController = new AIHoloController();
         tempController.generateAndPlayTts(fileName, textToSay, languageCode, voiceName, aiPipelineLabel,
-                                          aiDurationMillis, requestedMode, audio2FaceEnabled, 
-                                          false, null, null, 0);
+                                          aiDurationMillis, requestedMode, audio2FaceEnabled);
     }
 
     private void executeTtsForSelection(String fileName, String textToSay, String languageCode,
@@ -1280,8 +1100,8 @@ public class AIHoloController {
     private static void processCoquiTTS(String fileName, String textToSay, String languageCode, String voiceName,
                                         boolean audio2FaceEnabled) throws Exception {
         try {
-            // Determine TTS quality from environment or use BALANCED as default
-            String qualityEnv = System.getenv("TTS_QUALITY");
+            // Determine TTS quality from centralized configuration
+            String qualityEnv = Configuration.getTtsQuality();
             TTSCoquiEnhanced.TTSQuality quality = TTSCoquiEnhanced.TTSQuality.BALANCED;
             
             if (qualityEnv != null) {

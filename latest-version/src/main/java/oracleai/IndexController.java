@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 @Controller
 public class IndexController {
     
-    private static final String AIHOLO_HOST_URL = System.getenv("AIHOLO_HOST_URL");
+    private static final String AIHOLO_HOST_URL = oracleai.aiholo.Configuration.getAiholoHostUrl();
     
     @GetMapping("/")
     public String index(Model model) {

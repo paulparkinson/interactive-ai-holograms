@@ -13,7 +13,7 @@ import java.nio.file.Paths;
 public class StatusController {
     
     private static String statusValue = "default";
-    private static final String STATUS_FILE_PATH = System.getenv("STATUS_FILE_PATH");
+    private static final String STATUS_FILE_PATH = oracleai.aiholo.Configuration.getStatusFilePath();
     
     /**
      * Get the current status value

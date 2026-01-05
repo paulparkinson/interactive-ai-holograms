@@ -33,7 +33,7 @@ public class DefaultFallbackAgent implements Agent {
     @Override
     public boolean isConfigured() {
         // Check if OpenAI API key is available (use same env var as ChatGPTService)
-        String apiKey = System.getenv("OPENAI_API_KEY");
+        String apiKey = oracleai.aiholo.Configuration.getOpenAiApiKey();
         return apiKey != null && !apiKey.isEmpty();
     }
 

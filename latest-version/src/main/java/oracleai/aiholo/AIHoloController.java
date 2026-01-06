@@ -65,6 +65,9 @@ public class AIHoloController {
     @Autowired
     private AudioOutputService audioOutputService;
     
+    @Autowired
+    private AgentStateService agentStateService;
+    
     private String theValue = "mirrorme";
     private static final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private static final String SANDBOX_API_URL = Configuration.getSandboxApiUrl();
@@ -380,15 +383,7 @@ public class AIHoloController {
                            @RequestParam(value = "audioDelayMs", required = false, defaultValue = "500") Integer audioDelayMs) throws Exception {
         System.out.println("AIHoloController.explainer - enableDualAudio: " + enableDualAudio + ", audioDelayMs: " + audioDelayMs);
         theValue = "financialagent"; // Write same value as FinancialAgent for consistency
-        String filePath = OUTPUT_FILE_PATH != null ? OUTPUT_FILE_PATH : "aiholo_output.txt";
-        try (FileWriter writer = new FileWriter(filePath)) {
-            JSONObject json = new JSONObject();
-            json.put("data", theValue);
-            writer.write(json.toString());
-            writer.flush();
-        } catch (IOException e) {
-            return "Error writing to file: " + e.getMessage();
-        }
+        agentStateService.writeAgentValue(theValue);
         
         // Use AudioOutputService for dual audio playback
         System.out.println("EXPLAINER: Playing explainer.wav via AudioOutputService");
@@ -396,26 +391,6 @@ public class AIHoloController {
 
 
         return "Explained";
-    }
-
-
-
-    @GetMapping("/leia")
-    @ResponseBody
-    public String leia() throws Exception {
-        System.out.println("AIHoloController.leia");
-        theValue = "leia";
-        String filePath = OUTPUT_FILE_PATH != null ? OUTPUT_FILE_PATH : "aiholo_output.txt";
-        try (FileWriter writer = new FileWriter(filePath)) {
-            JSONObject json = new JSONObject();
-            json.put("data", theValue);
-            writer.write(json.toString());
-            writer.flush();
-        } catch (IOException e) {
-            return "Error writing to file: " + e.getMessage();
-        }
-        //     TTSAndAudio2Face.sendToAudio2Face("explainer-leia.wav");
-        return "leia hologram";
     }
 
 
@@ -460,14 +435,18 @@ public class AIHoloController {
         
         final boolean audio2FaceEnabled = false; // Audio2Face removed - always false
         theValue = "question";
+        agentStateService.writeAgentValue(theValue);
+        
         String filePath = OUTPUT_FILE_PATH != null ? OUTPUT_FILE_PATH : "aiholo_output.txt";
-        try (FileWriter writer = new FileWriter(filePath)) {
-            JSONObject json = new JSONObject();
-            json.put("data", theValue); // Store the response inside JSON
-            writer.write(json.toString());
-            writer.flush();
-        } catch (IOException e) {
-            return "Error writing to file: " + e.getMessage();
+        if (false) { // Legacy code block - keeping for reference but disabled
+            try (FileWriter writer = new FileWriter(filePath)) {
+                JSONObject json = new JSONObject();
+                json.put("data", theValue);
+                writer.write(json.toString());
+                writer.flush();
+            } catch (IOException e) {
+                return "Error writing to file: " + e.getMessage();
+            }
         }
             String normalized = question.toLowerCase();
 
@@ -556,6 +535,15 @@ public class AIHoloController {
         }).start();
         */
 
+    // Check if the command is simply "stop" - if so, stop audio playback
+    String trimmedQuestion = question.trim().toLowerCase();
+    if (trimmedQuestion.equals("stop") || trimmedQuestion.equals("stop please") || 
+        trimmedQuestion.equals("please stop")) {
+        System.out.println("Stop command detected - stopping audio playback");
+        audioOutputService.stopAllAudio();
+        return "Audio stopped";
+    }
+    
     String action = "chat";
     String answer;
     double aiDurationMillis = 0.0;
@@ -582,15 +570,7 @@ public class AIHoloController {
                 theValue = agentResponse.getValueName();
                 
                 System.out.println("---------AGENT USED: " + agentResponse.getAgentName() + " writing value: " + theValue + " to file");
-                try (FileWriter writer = new FileWriter(filePath)) {
-                    JSONObject json = new JSONObject();
-                    json.put("data", theValue);
-                    writer.write(json.toString());
-                    writer.flush();
-                    System.out.println("Successfully wrote agent value '" + theValue + "' to " + filePath);
-                } catch (IOException e) {
-                    System.err.println("Error writing agent name to file: " + e.getMessage());
-                }
+                agentStateService.writeAgentResponse(agentResponse);
             }
 
         } else {
@@ -641,13 +621,6 @@ public class AIHoloController {
             System.err.println("Requested TTS mode failed completely: " + e.getMessage());
             // Fallback to original implementation
             processMetahuman(fileName, answer, languageCode, voicename, audio2FaceEnabled);
-        }
-        if (answer != null) {
-            String lowercaseAnswer = answer.toLowerCase();
-            if (lowercaseAnswer.contains("leia") || lowercaseAnswer.contains("star wars")) {
-                Thread.sleep(5);
-                leia();
-            }
         }
         return answer;
     }

@@ -3,6 +3,8 @@ package oracleai.aiholo;
 import org.springframework.stereotype.Service;
 import javax.sound.sampled.*;
 import java.io.ByteArrayInputStream;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.List;
 
 /**
  * Centralized service for handling audio output with support for dual audio streaming.
@@ -10,6 +12,9 @@ import java.io.ByteArrayInputStream;
  */
 @Service
 public class AudioOutputService {
+    
+    // Track active clips for stop functionality
+    private final List<Clip> activeClips = new CopyOnWriteArrayList<>();
     
     /**
      * Plays audio file to both configured audio devices with optional delay between streams.
@@ -138,6 +143,9 @@ public class AudioOutputService {
                 Clip clip = (Clip) targetMixer.getLine(info);
                 clip.open(audioInputStream);
                 
+                // Track this clip for stop functionality
+                activeClips.add(clip);
+                
                 // Set volume to maximum if supported
                 if (clip.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
                     FloatControl gainControl = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
@@ -149,6 +157,7 @@ public class AudioOutputService {
                 // Wait for playback to complete
                 Thread.sleep(audioData.length * 1000L / (long)(format.getSampleRate() * format.getFrameSize()));
                 clip.close();
+                activeClips.remove(clip);
                 
             } catch (Exception e) {
                 System.err.println("Error playing audio to device '" + deviceName + "': " + e.getMessage());
@@ -169,14 +178,36 @@ public class AudioOutputService {
             ByteArrayInputStream inputStream = new ByteArrayInputStream(audioData);
             AudioInputStream audioInputStream = new AudioInputStream(inputStream, format, audioData.length / format.getFrameSize());
             
+            activeClips.add(clip);
             clip.open(audioInputStream);
             clip.start();
             
             // Wait for playback to complete
             Thread.sleep(audioData.length * 1000L / (long)(format.getSampleRate() * format.getFrameSize()));
             clip.close();
+            activeClips.remove(clip);
         } catch (Exception e) {
             System.err.println("Error playing audio to default device: " + e.getMessage());
         }
+    }
+    
+    /**
+     * Stops all currently playing audio clips.
+     * Useful for interrupting audio playback when user says "stop".
+     */
+    public void stopAllAudio() {
+        System.out.println("Stopping all audio playback. Active clips: " + activeClips.size());
+        for (Clip clip : activeClips) {
+            try {
+                if (clip != null && clip.isRunning()) {
+                    clip.stop();
+                    clip.close();
+                }
+            } catch (Exception e) {
+                System.err.println("Error stopping clip: " + e.getMessage());
+            }
+        }
+        activeClips.clear();
+        System.out.println("All audio playback stopped.");
     }
 }

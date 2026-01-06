@@ -45,6 +45,9 @@ public class VoiceAssistantService {
     @Autowired
     private AudioOutputService audioOutputService;
     
+    @Autowired
+    private AgentStateService agentStateService;
+    
     // Conversation history for context (used by agents)
     private static List<Map<String, String>> conversationHistory = new ArrayList<>();
     
@@ -152,8 +155,16 @@ public class VoiceAssistantService {
                             detectedLanguage = "en-US";
                         }
                         
+                        // Check if command is to stop audio playback
+                        String trimmedTranscription = transcription.trim().toLowerCase();
+                        if (trimmedTranscription.equals("stop") || trimmedTranscription.equals("stop please") || 
+                            trimmedTranscription.equals("please stop")) {
+                            System.out.println("[" + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")) + "] Stop command detected - stopping audio playback");
+                            audioOutputService.stopAllAudio();
+                            playTextToSpeech("Audio stopped");
+                        }
                         // Check if command is to clear history
-                        if (transcription.toLowerCase().contains("clear history")) {
+                        else if (transcription.toLowerCase().contains("clear history")) {
                             conversationHistory.clear();
                             System.out.println("[" + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")) + "] History cleared.");
                             playTextToSpeech("History cleared");
@@ -168,6 +179,9 @@ public class VoiceAssistantService {
                                         response.getAgentName(),
                                         response.getDurationMs(),
                                         response.getAnswer());
+                                
+                                // Write agent state for hologram selection
+                                agentStateService.writeAgentResponse(response);
                                 
                                 System.out.println("[" + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")) + "] Playing response...");
                                 playTextToSpeech(response.getAnswer());

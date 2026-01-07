@@ -28,12 +28,33 @@ public class Configuration {
         return "true".equalsIgnoreCase(System.getenv("ENABLE_VOICE_ASSISTANT"));
     }
     
+    /**
+     * Get the voice assistant engine to use (porcupine or openwakeword)
+     * @return "porcupine" or "openwakeword", defaults to "porcupine"
+     */
+    public static String getVoiceAssistantEngine() {
+        String engine = System.getenv("VOICE_ASSISTANT_ENGINE");
+        return engine != null ? engine.toLowerCase() : "porcupine";
+    }
+    
+    // Porcupine-specific configuration
     public static String getPorcupineAccessKey() {
         return System.getenv("PORCUPINE_ACCESS_KEY");
     }
     
     public static String getKeywordPath() {
         return System.getenv("KEYWORD_PATH");
+    }
+    
+    // OpenWakeWord-specific configuration
+    public static String getOpenWakeWordScriptPath() {
+        String scriptPath = System.getenv("OPENWAKEWORD_SCRIPT_PATH");
+        return scriptPath != null ? scriptPath : "wakeupwords/openwakeword_bridge.py";
+    }
+    
+    public static String getOpenWakeWordModel() {
+        String model = System.getenv("OPENWAKEWORD_MODEL");
+        return model != null ? model : "hey_jarvis";
     }
     
     public static int getAudioDeviceIndex() {

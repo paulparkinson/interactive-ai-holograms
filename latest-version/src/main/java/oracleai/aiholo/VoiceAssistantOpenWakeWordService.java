@@ -1,19 +1,5 @@
-/*
-    Copyright 2018-2025 Picovoice Inc.
-
-    You may not use this file except in compliance with the license. A copy of the license is
-    located in the "LICENSE" file accompanying this source.
-
-    Unless required by applicable law or agreed to in writing, software distributed under the
-    License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
-    express or implied. See the License for the specific language governing permissions and
-    limitations under the License.
-*/
-
 package oracleai.aiholo;
 
-import ai.picovoice.porcupine.Porcupine;
-import ai.picovoice.porcupine.PorcupineException;
 import com.google.cloud.texttospeech.v1.*;
 import com.google.cloud.speech.v1.*;
 import com.google.cloud.language.v1.*;
@@ -22,7 +8,7 @@ import com.google.api.gax.rpc.ResponseObserver;
 import com.google.api.gax.rpc.StreamController;
 import com.google.protobuf.ByteString;
 import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.sound.sampled.*;
 import java.io.*;
@@ -34,10 +20,13 @@ import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import org.springframework.beans.factory.annotation.Autowired;
 
-@Service
-public class VoiceAssistantService {
+/**
+ * Voice Assistant Service using OpenWakeWord for wake word detection
+ * OpenWakeWord is an open-source Python library that runs locally
+ */
+@Service("openWakeWordVoiceAssistant")
+public class VoiceAssistantOpenWakeWordService {
     
     @Autowired
     private AgentService agentService;
@@ -59,25 +48,14 @@ public class VoiceAssistantService {
     private static String streamingDetectedLanguage = "en-US";
     private static boolean languageDetectedDuringStream = false;
     
+    private Process pythonProcess;
+    private BufferedReader pythonOutput;
+    private BufferedWriter pythonInput;
+    
     public void runDemo(
-            String accessKey,
-            String libPath,
-            String modelPath,
-            String device,
-            String[] keywordPaths,
-            float[] sensitivities,
+            String pythonScriptPath,
+            String modelName,
             int audioDeviceIndex) {
-
-        // create keywords from keyword_paths
-        String[] keywords = new String[keywordPaths.length];
-        for (int i = 0; i < keywordPaths.length; i++) {
-            File keywordFile = new File(keywordPaths[i]);
-            if (!keywordFile.exists()) {
-                throw new IllegalArgumentException(String.format("Keyword file at '%s' " +
-                        "does not exist", keywordPaths[i]));
-            }
-            keywords[i] = keywordFile.getName().split("_")[0];
-        }
 
         AudioFormat format = new AudioFormat(16000f, 16, 1, true, false);
 
@@ -94,30 +72,19 @@ public class VoiceAssistantService {
             return;
         }
 
-        Porcupine porcupine = null;
         try {
-            porcupine = new Porcupine.Builder()
-                    .setAccessKey(accessKey)
-                    .setLibraryPath(libPath)
-                    .setModelPath(modelPath)
-                    .setDevice(device)
-                    .setKeywordPaths(keywordPaths)
-                    .setSensitivities(sensitivities)
-                    .build();
-
+            // Start Python OpenWakeWord subprocess
+            startOpenWakeWordProcess(pythonScriptPath, modelName);
+            
             micDataLine.start();
-            System.out.print("Listening for {");
-            for (int i = 0; i < keywords.length; i++) {
-                System.out.printf(" %s(%.02f)", keywords[i], sensitivities[i]);
-            }
-            System.out.print(" }\n");
+            System.out.println("Listening for wake word using OpenWakeWord: " + modelName);
             System.out.println("Press enter to stop recording...");
 
-            // buffers for processing audio
-            int frameLength = porcupine.getFrameLength();
+            // Buffer for processing audio (OpenWakeWord uses 1280 samples = 80ms at 16kHz)
+            int frameLength = 1280;
             ByteBuffer captureBuffer = ByteBuffer.allocate(frameLength * 2);
             captureBuffer.order(ByteOrder.LITTLE_ENDIAN);
-            short[] porcupineBuffer = new short[frameLength];
+            short[] audioBuffer = new short[frameLength];
 
             int numBytesRead;
             while (System.in.available() == 0) {
@@ -125,20 +92,20 @@ public class VoiceAssistantService {
                 // read a buffer of audio
                 numBytesRead = micDataLine.read(captureBuffer.array(), 0, captureBuffer.capacity());
 
-                // don't pass to porcupine if we don't have a full buffer
+                // don't pass to OpenWakeWord if we don't have a full buffer
                 if (numBytesRead != frameLength * 2) {
                     continue;
                 }
 
                 // copy into 16-bit buffer
-                captureBuffer.asShortBuffer().get(porcupineBuffer);
+                captureBuffer.asShortBuffer().get(audioBuffer);
 
-                // process with porcupine
-                int result = porcupine.process(porcupineBuffer);
-                if (result >= 0) {
-                    System.out.printf("[%s] Detected '%s'\n",
-                            LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")),
-                            keywords[result]);
+                // Send audio to Python OpenWakeWord process
+                boolean detected = sendAudioToOpenWakeWord(audioBuffer);
+                
+                if (detected) {
+                    System.out.printf("[%s] Wake word detected!\n",
+                            LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
                     
                     // Trigger Google Cloud Streaming STT
                     System.out.println("Listening for speech...");
@@ -196,9 +163,73 @@ public class VoiceAssistantService {
             }
         } catch (Exception e) {
             System.err.println(e.toString());
+            e.printStackTrace();
         } finally {
-            if (porcupine != null) {
-                porcupine.delete();
+            stopOpenWakeWordProcess();
+        }
+    }
+    
+    /**
+     * Start the Python OpenWakeWord process
+     */
+    private void startOpenWakeWordProcess(String pythonScriptPath, String modelName) throws IOException {
+        System.out.println("Starting OpenWakeWord Python process...");
+        
+        ProcessBuilder pb = new ProcessBuilder("python", pythonScriptPath, modelName);
+        pb.redirectErrorStream(true);
+        pythonProcess = pb.start();
+        
+        pythonOutput = new BufferedReader(new InputStreamReader(pythonProcess.getInputStream()));
+        pythonInput = new BufferedWriter(new OutputStreamWriter(pythonProcess.getOutputStream()));
+        
+        // Wait for initialization message
+        String line = pythonOutput.readLine();
+        if (line != null && line.contains("READY")) {
+            System.out.println("OpenWakeWord initialized successfully");
+        } else {
+            throw new IOException("Failed to initialize OpenWakeWord: " + line);
+        }
+    }
+    
+    /**
+     * Send audio frame to Python OpenWakeWord process and check for detection
+     */
+    private boolean sendAudioToOpenWakeWord(short[] audioData) {
+        try {
+            // Convert audio to comma-separated string
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < audioData.length; i++) {
+                if (i > 0) sb.append(",");
+                sb.append(audioData[i]);
+            }
+            sb.append("\n");
+            
+            pythonInput.write(sb.toString());
+            pythonInput.flush();
+            
+            // Read response
+            String response = pythonOutput.readLine();
+            return response != null && response.trim().equals("DETECTED");
+            
+        } catch (IOException e) {
+            System.err.println("Error communicating with OpenWakeWord process: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Stop the Python OpenWakeWord process
+     */
+    private void stopOpenWakeWordProcess() {
+        if (pythonProcess != null) {
+            try {
+                pythonInput.write("QUIT\n");
+                pythonInput.flush();
+                pythonProcess.waitFor(5, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                System.err.println("Error stopping OpenWakeWord process: " + e.getMessage());
+            } finally {
+                pythonProcess.destroy();
             }
         }
     }
@@ -221,7 +252,7 @@ public class VoiceAssistantService {
         if (!AudioSystem.isLineSupported(dataLineInfo)) {
             throw new LineUnavailableException(
                             "Default capture device does not support the format required " +
-                            "by Picovoice (16kHz, 16-bit, linearly-encoded, single-channel PCM).");
+                            "by OpenWakeWord (16kHz, 16-bit, linearly-encoded, single-channel PCM).");
         }
 
         return (TargetDataLine) AudioSystem.getLine(dataLineInfo);
@@ -436,18 +467,6 @@ public class VoiceAssistantService {
         } else if (detectedLang.startsWith("hi")) {
             return transcript.contains("कृपया") || transcript.contains("प्रिय");
         }
-        
-        // Fallback: check all languages if detection failed
-        if (lower.contains("please")) return true;
-        if (transcript.contains("请") || transcript.contains("麻烦") || transcript.contains("拜托")) return true;
-        if (lower.contains("por favor")) return true;
-        if (lower.contains("plaît")) return true;
-        if (lower.contains("bitte")) return true;
-        if (lower.contains("favore") || lower.contains("piacere")) return true;
-        if (lower.contains("favor") || lower.contains("gentileza")) return true;
-        if (transcript.contains("пожалуйста")) return true;
-        if (transcript.contains("ください") || transcript.contains("お願い")) return true;
-        if (transcript.contains("주세요") || transcript.contains("부탁")) return true;
         
         return false;
     }

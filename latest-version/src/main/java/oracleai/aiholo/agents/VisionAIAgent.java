@@ -5,6 +5,15 @@ import org.json.JSONObject;
 import org.springframework.http.*;
 import org.springframework.web.client.RestTemplate;
 import java.util.Base64;
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import com.github.sarxos.webcam.Webcam;
+import com.github.sarxos.webcam.WebcamResolution;
 
 /**
  * Vision AI agent that analyzes images using OCI Vision Service
@@ -35,13 +44,7 @@ public class VisionAIAgent implements Agent {
     @Override
     public String[][] getKeywords() {
         return new String[][] {
-            {"vision", "agent"},
-            {"camera"},
-            {"picture"},
-            {"photo"},
-            {"image"},
-            {"what", "see"},
-            {"analyze", "image"}
+            {"what", "see"}
         };
     }
 
@@ -55,12 +58,95 @@ public class VisionAIAgent implements Agent {
     public String processQuestion(String question) {
         System.out.println("Vision AI Agent processing: " + question);
         
-        if (!isConfigured()) {
-            return "Vision AI Agent is not configured. Please set OCI_VISION_ENDPOINT and OCI_COMPARTMENT_ID environment variables.";
+        // Capture image from webcam
+        try {
+            String imagePath = captureAndSaveImage();
+            
+            if (imagePath != null) {
+                String result = "I've captured an image and saved it to: " + imagePath;
+                
+                // If OCI Vision is configured, also analyze the image
+                if (isConfigured()) {
+                    File imageFile = new File(imagePath);
+                    BufferedImage bufferedImage = ImageIO.read(imageFile);
+                    String base64Image = convertImageToBase64(bufferedImage);
+                    String analysis = analyzeImage(base64Image);
+                    result += "\n\nAnalysis: " + analysis;
+                }
+                
+                return result;
+            } else {
+                return "Sorry, I couldn't capture an image from the webcam.";
+            }
+        } catch (Exception e) {
+            System.err.println("Error capturing image: " + e.getMessage());
+            e.printStackTrace();
+            return "An error occurred while capturing the image: " + e.getMessage();
         }
-        
-        // This will be called after the image is captured and sent from the frontend
-        return "Please use the camera button to capture an image for analysis.";
+    }
+    
+    /**
+     * Captures an image from the default webcam and saves it to the current directory
+     * 
+     * @return Path to the saved image file, or null if capture failed
+     */
+    private String captureAndSaveImage() {
+        Webcam webcam = null;
+        try {
+            // Get default webcam
+            webcam = Webcam.getDefault();
+            if (webcam == null) {
+                System.err.println("No webcam detected!");
+                return null;
+            }
+            
+            // Set resolution
+            webcam.setViewSize(WebcamResolution.VGA.getSize());
+            
+            // Open webcam
+            System.out.println("Opening webcam...");
+            webcam.open();
+            
+            // Give the camera time to adjust
+            Thread.sleep(1000);
+            
+            // Capture image
+            System.out.println("Capturing image...");
+            BufferedImage image = webcam.getImage();
+            
+            // Generate filename with timestamp
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            String filename = "vision_capture_" + timestamp + ".png";
+            
+            // Save to current directory
+            File outputFile = new File(filename);
+            ImageIO.write(image, "PNG", outputFile);
+            
+            System.out.println("Image saved to: " + outputFile.getAbsolutePath());
+            return outputFile.getAbsolutePath();
+            
+        } catch (Exception e) {
+            System.err.println("Error capturing image: " + e.getMessage());
+            e.printStackTrace();
+            return null;
+        } finally {
+            if (webcam != null && webcam.isOpen()) {
+                webcam.close();
+            }
+        }
+    }
+    
+    /**
+     * Converts a BufferedImage to Base64 string
+     * 
+     * @param image BufferedImage to convert
+     * @return Base64-encoded string
+     */
+    private String convertImageToBase64(BufferedImage image) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(image, "png", baos);
+        byte[] imageBytes = baos.toByteArray();
+        return Base64.getEncoder().encodeToString(imageBytes);
     }
 
     /**

@@ -19,14 +19,17 @@ public class AgentService {
     private final List<Agent> registeredAgents = new ArrayList<>();
     private final DataSource dataSource;
     private final ChatGPTService chatGPTService;
+    private final ConversationHistoryService conversationHistoryService;
     
     /**
      * Initialize and register all agents at service creation
      */
     @Autowired
-    public AgentService(DataSource dataSource, ChatGPTService chatGPTService) {
+    public AgentService(DataSource dataSource, ChatGPTService chatGPTService, 
+                        ConversationHistoryService conversationHistoryService) {
         this.dataSource = dataSource;
         this.chatGPTService = chatGPTService;
+        this.conversationHistoryService = conversationHistoryService;
         initializeAgents();
     }
     
@@ -47,6 +50,7 @@ public class AgentService {
         String openaiKey = Configuration.getOpenAiKey();
         
         // Register agents in priority order
+        registerAgent(new ClearHistoryAgent(conversationHistoryService));
         registerAgent(new MirrorMeAgent(outputFilePath));
         registerAgent(new DigitalTwinAgent(outputFilePath));
         registerAgent(new SignAgent(outputFilePath));

@@ -163,13 +163,7 @@ public class VoiceAssistantPorcupineService {
                             audioOutputService.stopAllAudio();
                             playTextToSpeech("Audio stopped");
                         }
-                        // Check if command is to clear history
-                        else if (transcription.toLowerCase().contains("clear history")) {
-                            conversationHistory.clear();
-                            System.out.println("[" + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")) + "] History cleared.");
-                            playTextToSpeech("History cleared");
-                        }
-                        // Process question with AgentService
+                        // Process all other questions (including clear history) with AgentService
                         else {
                             System.out.println("[" + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")) + "] Processing request with AgentService...");
                             AgentService.AgentResponse response = agentService.processQuestion(transcription, 30);

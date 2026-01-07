@@ -16,19 +16,17 @@ import com.github.sarxos.webcam.Webcam;
 import com.github.sarxos.webcam.WebcamResolution;
 
 /**
- * Vision AI agent that analyzes images using OCI Vision Service
- * to detect objects, text, and other visual features.
+ * Vision AI agent that analyzes images using ChatGPT Vision API
+ * to describe and understand visual content.
  * Triggered by keywords related to vision, images, or camera.
  */
 public class VisionAIAgent implements Agent {
-    private final String ociVisionEndpoint;
-    private final String ociCompartmentId;
-    private final String ociApiKey;
+    private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+    private static final String OPENAI_API_KEY = oracleai.aiholo.Configuration.getOpenAiApiKey();
+    private static final String VISION_MODEL = "gpt-4o";  // GPT-4 with vision capabilities
     
     public VisionAIAgent(String ociVisionEndpoint, String ociCompartmentId, String ociApiKey) {
-        this.ociVisionEndpoint = ociVisionEndpoint;
-        this.ociCompartmentId = ociCompartmentId;
-        this.ociApiKey = ociApiKey;
+        // Keep constructor signature for compatibility but don't use OCI params
     }
     
     @Override
@@ -50,8 +48,7 @@ public class VisionAIAgent implements Agent {
 
     @Override
     public boolean isConfigured() {
-        return ociVisionEndpoint != null && !ociVisionEndpoint.isEmpty() &&
-               ociCompartmentId != null && !ociCompartmentId.isEmpty();
+        return OPENAI_API_KEY != null && !OPENAI_API_KEY.isEmpty();
     }
 
     @Override
@@ -59,22 +56,26 @@ public class VisionAIAgent implements Agent {
         System.out.println("Vision AI Agent processing: " + question);
         
         // Capture image from webcam
+        if (!isConfigured()) {
+            return "Vision AI is not configured. Please set OPENAI_API_KEY environment variable.";
+        }
+        
+        // Capture image from webcam
         try {
             String imagePath = captureAndSaveImage();
             
             if (imagePath != null) {
-                String result = "I've captured an image and saved it to: " + imagePath;
+                System.out.println("Image captured, analyzing with ChatGPT Vision...");
                 
-                // If OCI Vision is configured, also analyze the image
-                if (isConfigured()) {
-                    File imageFile = new File(imagePath);
-                    BufferedImage bufferedImage = ImageIO.read(imageFile);
-                    String base64Image = convertImageToBase64(bufferedImage);
-                    String analysis = analyzeImage(base64Image);
-                    result += "\n\nAnalysis: " + analysis;
-                }
+                // Read and convert image to base64
+                File imageFile = new File(imagePath);
+                BufferedImage bufferedImage = ImageIO.read(imageFile);
+                String base64Image = convertImageToBase64(bufferedImage);
                 
-                return result;
+                // Analyze with ChatGPT Vision
+                String analysis = analyzeImageWithChatGPT(base64Image, question);
+                
+                return analysis;
             } else {
                 return "Sorry, I couldn't capture an image from the webcam.";
             }
@@ -150,56 +151,61 @@ public class VisionAIAgent implements Agent {
     }
 
     /**
-     * Analyzes an image using OCI Vision Service
+     * Analyzes an image using ChatGPT Vision API
      * 
      * @param imageBase64 Base64-encoded image data
-     * @return Description of detected objects and features
+     * @param userQuestion The user's original question for context
+     * @return Natural language description of the image
      */
-    public String analyzeImage(String imageBase64) {
-        System.out.println("Vision AI Agent analyzing image...");
-        
-        if (!isConfigured()) {
-            return "Vision AI Agent is not configured properly.";
-        }
+    private String analyzeImageWithChatGPT(String imageBase64, String userQuestion) {
+        System.out.println("Analyzing image with ChatGPT Vision API...");
         
         try {
             RestTemplate restTemplate = new RestTemplate();
             
-            // Build OCI Vision API request
+            // Build the request body for GPT-4 Vision
             JSONObject requestBody = new JSONObject();
-            requestBody.put("compartmentId", ociCompartmentId);
+            requestBody.put("model", VISION_MODEL);
+            requestBody.put("max_tokens", 500);
             
-            JSONObject imageObject = new JSONObject();
-            imageObject.put("source", "INLINE");
-            imageObject.put("data", imageBase64);
+            // Create messages array with image
+            JSONArray messages = new JSONArray();
+            JSONObject userMessage = new JSONObject();
+            userMessage.put("role", "user");
             
-            JSONArray features = new JSONArray();
-            JSONObject objectDetection = new JSONObject();
-            objectDetection.put("featureType", "OBJECT_DETECTION");
-            objectDetection.put("maxResults", 10);
-            features.put(objectDetection);
+            // Create content array with text and image
+            JSONArray content = new JSONArray();
             
-            JSONObject imageClassification = new JSONObject();
-            imageClassification.put("featureType", "IMAGE_CLASSIFICATION");
-            imageClassification.put("maxResults", 5);
-            features.put(imageClassification);
+            // Add text prompt
+            JSONObject textContent = new JSONObject();
+            textContent.put("type", "text");
+            textContent.put("text", "Describe what you see in this image in a natural, conversational way. Be specific about objects, people, actions, and the overall scene. Keep your response concise but informative.");
+            content.put(textContent);
             
-            requestBody.put("image", imageObject);
-            requestBody.put("features", features);
+            // Add image
+            JSONObject imageContent = new JSONObject();
+            imageContent.put("type", "image_url");
+            JSONObject imageUrl = new JSONObject();
+            imageUrl.put("url", "data:image/png;base64," + imageBase64);
+            imageContent.put("image_url", imageUrl);
+            content.put(imageContent);
+            
+            userMessage.put("content", content);
+            messages.put(userMessage);
+            
+            requestBody.put("messages", messages);
             
             // Set headers
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            if (ociApiKey != null && !ociApiKey.isEmpty()) {
-                headers.set("Authorization", "Bearer " + ociApiKey);
-            }
+            headers.setBearerAuth(OPENAI_API_KEY);
             
             HttpEntity<String> entity = new HttpEntity<>(requestBody.toString(), headers);
             
             // Make the API call
-            System.out.println("Calling OCI Vision API at: " + ociVisionEndpoint);
+            System.out.println("Calling ChatGPT Vision API...");
             ResponseEntity<String> response = restTemplate.exchange(
-                ociVisionEndpoint + "/actions/analyzeImage",
+                OPENAI_API_URL,
                 HttpMethod.POST,
                 entity,
                 String.class
@@ -208,40 +214,22 @@ public class VisionAIAgent implements Agent {
             // Parse the response
             if (response.getStatusCode() == HttpStatus.OK) {
                 JSONObject responseJson = new JSONObject(response.getBody());
-                StringBuilder result = new StringBuilder("I can see: ");
-                
-                // Extract object detection results
-                if (responseJson.has("imageObjects")) {
-                    JSONArray objects = responseJson.getJSONArray("imageObjects");
-                    for (int i = 0; i < Math.min(5, objects.length()); i++) {
-                        JSONObject obj = objects.getJSONObject(i);
-                        String name = obj.getString("name");
-                        double confidence = obj.getDouble("confidence");
-                        result.append(name).append(" (").append(String.format("%.0f", confidence * 100)).append("%), ");
-                    }
+                JSONArray choices = responseJson.getJSONArray("choices");
+                if (choices.length() > 0) {
+                    JSONObject firstChoice = choices.getJSONObject(0);
+                    JSONObject message = firstChoice.getJSONObject("message");
+                    String description = message.getString("content").trim();
+                    
+                    System.out.println("ChatGPT Vision analysis complete");
+                    return description;
                 }
-                
-                // Extract classification results
-                if (responseJson.has("labels")) {
-                    JSONArray labels = responseJson.getJSONArray("labels");
-                    result.append("\nCategories: ");
-                    for (int i = 0; i < Math.min(3, labels.length()); i++) {
-                        JSONObject label = labels.getJSONObject(i);
-                        String name = label.getString("name");
-                        result.append(name).append(", ");
-                    }
-                }
-                
-                String finalResult = result.toString().replaceAll(", $", "");
-                System.out.println("Vision AI analysis complete: " + finalResult);
-                return finalResult;
             }
             
-            System.err.println("Unexpected response from OCI Vision API: " + response.getStatusCode());
-            return "Sorry, I couldn't analyze the image. Status: " + response.getStatusCode();
+            System.err.println("Unexpected response from ChatGPT Vision API: " + response.getStatusCode());
+            return "Sorry, I couldn't analyze the image with ChatGPT.";
             
         } catch (Exception e) {
-            System.err.println("Error calling OCI Vision API: " + e.getMessage());
+            System.err.println("Error calling ChatGPT Vision API: " + e.getMessage());
             e.printStackTrace();
             return "An error occurred while analyzing the image: " + e.getMessage();
         }

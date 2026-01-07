@@ -812,23 +812,20 @@ public class AIHoloController {
     public String analyzeVisionImage(@RequestBody Map<String, String> payload) {
         System.out.println("Vision AI analysis requested");
         
-        String imageData = payload.get("imageData");
-        if (imageData == null || imageData.isEmpty()) {
-            return "Error: No image data provided";
+        // Note: The VisionAIAgent now captures images automatically via webcam
+        // when triggered with "what do you see" keywords.
+        // This endpoint is kept for backwards compatibility but delegates to AgentService
+        
+        String question = payload.getOrDefault("question", "what do you see");
+        
+        // Use AgentService to process with VisionAIAgent
+        AgentService.AgentResponse response = agentService.processQuestion(question, 30);
+        
+        if (response != null && response.getAnswer() != null) {
+            return response.getAnswer();
         }
         
-        // Find the VisionAIAgent
-        for (Agent agent : agentService.getRegisteredAgents()) {
-            if (agent instanceof VisionAIAgent) {
-                VisionAIAgent visionAgent = (VisionAIAgent) agent;
-                if (!visionAgent.isConfigured()) {
-                    return "Vision AI Agent is not configured. Please set OCI_VISION_ENDPOINT and OCI_COMPARTMENT_ID environment variables.";
-                }
-                return visionAgent.analyzeImage(imageData);
-            }
-        }
-        
-        return "Vision AI Agent is not available";
+        return "Vision AI Agent is not available or failed to process request";
     }
 
     @GetMapping("/polling/stop")

@@ -150,8 +150,7 @@ def main():
         st.caption( ':blue[' +st1+']' )
         print( f" send user_question and ranked chunks to LLM and get answer duration: {round(s5time - s4time, 1)} sec.")
         st1 = "  send user_question and ranked chunks to LLM and get answer duration: "+str(round(s5time - s4time, 1)) +"sec."
-        st.caption( ':blue[' +st1+']' )uestion and ranked chunks to LLM and get answer duration: "+str(round(s5time - s4time, 1)) +"sec."
-      st.caption( ':blue[' +st1+']' )
+        st.caption( ':blue[' +st1+']' )
 
 if __name__ == '__main__':
     main()

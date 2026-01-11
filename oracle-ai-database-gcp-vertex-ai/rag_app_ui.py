@@ -48,18 +48,23 @@ def main():
     st.info("Oracle Database@Google Cloud and Google Vertex AI")
     st.header(" Ask your question to get answers based on your pdf " )
 
-    un = "ADMIN" # Enter Username
-    pw = "YOURPW" 
-    dsn = 'paulparkdb_tp' # Enter Connection String
-    wpwd = "Welcome12345" # Enter Wallet Password
+    # Load configuration from environment variables
+    un = os.getenv("DB_USERNAME", "ADMIN")
+    pw = os.getenv("DB_PASSWORD")
+    dsn = os.getenv("DB_DSN", "paulparkdb_tp")
+    wpwd = os.getenv("DB_WALLET_PASSWORD")
+    wallet_dir = os.getenv("DB_WALLET_DIR", "/home/ssh-key-2025-10-20/wallet")
+    
+    project_id = os.getenv("GCP_PROJECT_ID", "adb-pm-prod")
+    region = os.getenv("GCP_REGION", "us-central1")
 
     connection = oracledb.connect(
-        config_dir = '/home/ssh-key-2025-10-20/wallet', 
+        config_dir=wallet_dir, 
         user=un, 
         password=pw, 
         dsn=dsn,
-        wallet_location = '/home/ssh-key-2025-10-20/wallet',
-        wallet_password = wpwd)
+        wallet_location=wallet_dir,
+        wallet_password=wpwd)
     
     #upload the file
     pdf = st.file_uploader("upload your pdf",type="pdf")
@@ -95,11 +100,8 @@ def main():
 
       s2time =  time.time()
 
-    PROJECT_ID = "adb-pm-prod"  # @param {type:"string"}
-    REGION = "us-central1"  # @param {type:"string"}
-
-    # Initialize Vertex AI SDK
-    vertexai.init(project=PROJECT_ID, location=REGION)
+    # Initialize Vertex AI SDK with values from environment
+    vertexai.init(project=project_id, location=region)
 
         # Create embeddings
         # Choice 1, Set the OCI GenAI LLM

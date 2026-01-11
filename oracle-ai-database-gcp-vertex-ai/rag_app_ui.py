@@ -66,11 +66,29 @@ def main():
         wallet_location=wallet_dir,
         wallet_password=wpwd)
     
-    #upload the file
-    pdf = st.file_uploader("upload your pdf",type="pdf")
-
-    # Initialize knowledge_base variable
+    # Initialize model (needed for both new uploads and existing data)
+    model_4db = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    
+    # Check if table has existing data
     knowledge_base = None
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM rag_tab")
+            count = cursor.fetchone()[0]
+            if count > 0:
+                st.info(f"✓ Found {count} existing document chunks in database")
+                # Load existing knowledge base from table
+                knowledge_base = OracleVS(
+                    client=connection,
+                    embedding_function=model_4db,
+                    table_name="RAG_TAB",
+                    distance_strategy=DistanceStrategy.COSINE
+                )
+    except Exception as e:
+        st.warning(f"Could not load existing data: {e}")
+    
+    #upload the file
+    pdf = st.file_uploader("upload your pdf (optional if data already exists)",type="pdf")
 
     #extract the text
     if pdf is not None:
@@ -90,15 +108,11 @@ def main():
       s1time = time.time()
 
       #create knowledge base in Oracle.
-      # Initialize model
-      model_4db = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-
       # Create vector store
-      #knowledge_base = OracleVS.from_documents(docs, model_4db, client=conn23c, table_name="MY_DEMO4", distance_strategy=DistanceStrategy.DOT_PRODUCT)
-      #knowledge_base = OracleVS.from_documents(docs, model_4db, client=conn23c, table_name="MY_DEMO4", distance_strategy=DistanceStrategy.MAX_INNER_PRODUCT)
-      knowledge_base = OracleVS.from_documents(docs, model_4db, client=connection, table_name="MY_DEMO4", distance_strategy=DistanceStrategy.COSINE)
+      knowledge_base = OracleVS.from_documents(docs, model_4db, client=connection, table_name="RAG_TAB", distance_strategy=DistanceStrategy.COSINE)
 
       s2time =  time.time()
+      st.success(f"✓ Uploaded and vectorized PDF in {round(s2time - s1time, 1)} seconds")
 
     # Initialize Vertex AI SDK with values from environment
     vertexai.init(project=project_id, location=region)

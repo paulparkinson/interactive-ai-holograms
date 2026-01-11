@@ -48,17 +48,17 @@ def main():
     st.info("Oracle Database@Google Cloud and Google Vertex AI")
     st.header(" Ask your question to get answers based on your pdf " )
 
-    un = "username" # Enter Username
-    pw = "password" # Enter Password
-    dsn = 'connection String' # Enter Connection String
-    wpwd = "wallet password" # Enter Wallet Password
+    un = "ADMIN" # Enter Username
+    pw = "YOURPW" 
+    dsn = 'paulparkdb_tp' # Enter Connection String
+    wpwd = "Welcome12345" # Enter Wallet Password
 
     connection = oracledb.connect(
-        config_dir = '../wallet', 
+        config_dir = '/home/ssh-key-2025-10-20/wallet', 
         user=un, 
         password=pw, 
         dsn=dsn,
-        wallet_location = '../wallet',
+        wallet_location = '/home/ssh-key-2025-10-20/wallet',
         wallet_password = wpwd)
     
     #upload the file
@@ -92,8 +92,8 @@ def main():
 
       s2time =  time.time()
 
-    PROJECT_ID = "Google Cloud Project ID"  # @param {type:"string"}
-    REGION = "Google Cloud Region"  # @param {type:"string"}
+    PROJECT_ID = "adb-pm-prod"  # @param {type:"string"}
+    REGION = "us-central1"  # @param {type:"string"}
 
     # Initialize Vertex AI SDK
     vertexai.init(project=PROJECT_ID, location=REGION)

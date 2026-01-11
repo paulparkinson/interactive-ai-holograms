@@ -1,0 +1,14 @@
+streamlit
+python-dotenv
+PyPDF2
+langchain
+langchain-core
+langchain-community
+langchain-text-splitters
+langchain-huggingface
+langchain-google-vertexai
+oracledb
+tqdm
+google-cloud-aiplatform
+vertexai
+sentence-transformers

@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
-from langchain.text_splitter import CharacterTextSplitter
+from langchain_text_splitters import CharacterTextSplitter
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
@@ -14,7 +14,6 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_huggingface import HuggingFaceEmbeddings
 from tqdm import tqdm, trange
 # Utils
-from langchain.schema import HumanMessage, SystemMessage
 from pydantic import BaseModel
 from langchain_community.chat_models import ChatVertexAI
 from langchain_community.embeddings import VertexAIEmbeddings

@@ -64,6 +64,9 @@ def main():
     #upload the file
     pdf = st.file_uploader("upload your pdf",type="pdf")
 
+    # Initialize knowledge_base variable
+    knowledge_base = None
+
     #extract the text
     if pdf is not None:
       pdf_reader = PdfReader(pdf)
@@ -116,35 +119,36 @@ def main():
       # ask a question
     user_question = st.text_input("Ask a question about your pdf")
     if user_question:
-      s3time =  time.time()
-      result_chunks=knowledge_base.similarity_search(user_question,5)
-      s4time = time.time()
-      # Define context and question dictionary
-      template = """Answer the question based only on the  following context:
-                 {context} Question: {question} """
-      prompt = PromptTemplate.from_template(template)
-      retriever = knowledge_base.as_retriever(search_kwargs={"k": 10})
-      context_and_question = {"context": retriever, "question": user_question}
+      if knowledge_base is None:
+        st.error("⚠️ Please upload a PDF file first!")
+        s4time = time.time()
+        # Define context and question dictionary
+        template = """Answer the question based only on the  following context:
+                   {context} Question: {question} """
+        prompt = PromptTemplate.from_template(template)
+        retriever = knowledge_base.as_retriever(search_kwargs={"k": 10})
+        context_and_question = {"context": retriever, "question": user_question}
 
-      chain = (
-        {"context": retriever, "question": RunnablePassthrough()}
-           | prompt
-           | llm
-           | StrOutputParser()
-      )
-      response = chain.invoke(user_question)
+        chain = (
+          {"context": retriever, "question": RunnablePassthrough()}
+             | prompt
+             | llm
+             | StrOutputParser()
+        )
+        response = chain.invoke(user_question)
 
-      print(user_question)
-      s5time = time.time()
-      st.write(response)
-      print( f" vectorixing and inserting chunks duration: {round(s2time - s1time, 1)} sec.")
-      st1 = " vectorizing and inserting chunks duration:  "+str(round(s2time - s1time, 1)) +"sec."
-      st.caption( ':blue[' +st1+']' )
-      print( f" search user_question and return chunks duration: {round(s4time - s3time, 1)} sec.")
-      st1 = " :search user_question,vector search  and return chunks duration  "+str(round(s4time - s3time, 1)) +"sec."
-      st.caption( ':blue[' +st1+']' )
-      print( f" send user_question and ranked chunks to LLM and get answer duration: {round(s5time - s4time, 1)} sec.")
-      st1 = "  send user_question and ranked chunks to LLM and get answer duration: "+str(round(s5time - s4time, 1)) +"sec."
+        print(user_question)
+        s5time = time.time()
+        st.write(response)
+        print( f" vectorixing and inserting chunks duration: {round(s2time - s1time, 1)} sec.")
+        st1 = " vectorizing and inserting chunks duration:  "+str(round(s2time - s1time, 1)) +"sec."
+        st.caption( ':blue[' +st1+']' )
+        print( f" search user_question and return chunks duration: {round(s4time - s3time, 1)} sec.")
+        st1 = " :search user_question,vector search  and return chunks duration  "+str(round(s4time - s3time, 1)) +"sec."
+        st.caption( ':blue[' +st1+']' )
+        print( f" send user_question and ranked chunks to LLM and get answer duration: {round(s5time - s4time, 1)} sec.")
+        st1 = "  send user_question and ranked chunks to LLM and get answer duration: "+str(round(s5time - s4time, 1)) +"sec."
+        st.caption( ':blue[' +st1+']' )uestion and ranked chunks to LLM and get answer duration: "+str(round(s5time - s4time, 1)) +"sec."
       st.caption( ':blue[' +st1+']' )
 
 if __name__ == '__main__':

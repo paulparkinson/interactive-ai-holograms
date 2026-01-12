@@ -137,13 +137,16 @@ def main():
     if user_question:
       if knowledge_base is None:
         st.error("⚠️ Please upload a PDF file first!")
+      else:
+        s3time = time.time()
+        result_chunks = knowledge_base.similarity_search(user_question, 5)
         s4time = time.time()
+        
         # Define context and question dictionary
-        template = """Answer the question based only on the  following context:
+        template = """Answer the question based only on the following context:
                    {context} Question: {question} """
         prompt = PromptTemplate.from_template(template)
         retriever = knowledge_base.as_retriever(search_kwargs={"k": 10})
-        context_and_question = {"context": retriever, "question": user_question}
 
         chain = (
           {"context": retriever, "question": RunnablePassthrough()}
@@ -151,20 +154,20 @@ def main():
              | llm
              | StrOutputParser()
         )
+        
+        s4_5time = time.time()
         response = chain.invoke(user_question)
-
-        print(user_question)
         s5time = time.time()
+        
+        # Display response
+        st.write("### Answer:")
         st.write(response)
-        print( f" vectorixing and inserting chunks duration: {round(s2time - s1time, 1)} sec.")
-        st1 = " vectorizing and inserting chunks duration:  "+str(round(s2time - s1time, 1)) +"sec."
-        st.caption( ':blue[' +st1+']' )
-        print( f" search user_question and return chunks duration: {round(s4time - s3time, 1)} sec.")
-        st1 = " :search user_question,vector search  and return chunks duration  "+str(round(s4time - s3time, 1)) +"sec."
-        st.caption( ':blue[' +st1+']' )
-        print( f" send user_question and ranked chunks to LLM and get answer duration: {round(s5time - s4time, 1)} sec.")
-        st1 = "  send user_question and ranked chunks to LLM and get answer duration: "+str(round(s5time - s4time, 1)) +"sec."
-        st.caption( ':blue[' +st1+']' )
+        
+        # Display timing info only if PDF was uploaded this session
+        st.write("---")
+        st.caption(f":blue[Vector search duration: {round(s4time - s3time, 2)} sec]")
+        st.caption(f":blue[LLM response duration: {round(s5time - s4_5time, 2)} sec]")
+        st.caption(f":blue[Total query time: {round(s5time - s3time, 2)} sec]")
 
 if __name__ == '__main__':
     main()

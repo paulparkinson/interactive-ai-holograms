@@ -110,9 +110,9 @@ def main():
 
     # Initialize LLM after Vertex AI is initialized
     llm = VertexAI(
-        model_name="gemini-1.5-flash-002",
+        model_name="gemini-2.0-flash-exp",
         max_output_tokens=8192,
-        temperature=1,
+        temperature=0.7,
         top_p=0.8,
         top_k=40,
         verbose=True,

@@ -4,21 +4,11 @@ from langchain_text_splitters import CharacterTextSplitter
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
-#from fastembed import TextEmbedding
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import oraclevs
 from langchain_community.vectorstores.oraclevs import OracleVS
 from langchain_community.vectorstores.utils import DistanceStrategy
-from langchain_core.documents import BaseDocumentTransformer, Document
+from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_huggingface import HuggingFaceEmbeddings
-from tqdm import tqdm, trange
-# Utils
-from pydantic import BaseModel
-from langchain_community.chat_models import ChatVertexAI
-from langchain_community.embeddings import VertexAIEmbeddings
-from langchain_community.llms import VertexAI
-from langchain_google_vertexai import VertexAI
+from langchain_google_vertexai import VertexAI, VertexAIEmbeddings
 from google.cloud import aiplatform
 
 import oracledb

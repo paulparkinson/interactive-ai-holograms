@@ -124,36 +124,42 @@ def main():
       if knowledge_base is None:
         st.error("⚠️ Please upload a PDF file first!")
       else:
-        s3time = time.time()
-        result_chunks = knowledge_base.similarity_search(user_question, 5)
-        s4time = time.time()
-        
-        # Define context and question dictionary
-        template = """Answer the question based only on the following context:
-                   {context} Question: {question} """
-        prompt = PromptTemplate.from_template(template)
-        retriever = knowledge_base.as_retriever(search_kwargs={"k": 10})
+        try:
+          with st.spinner('🔍 Searching database and generating answer...'):
+            s3time = time.time()
+            result_chunks = knowledge_base.similarity_search(user_question, 5)
+            s4time = time.time()
+            
+            # Define context and question dictionary
+            template = """Answer the question based only on the following context:
+                       {context} Question: {question} """
+            prompt = PromptTemplate.from_template(template)
+            retriever = knowledge_base.as_retriever(search_kwargs={"k": 10})
 
-        chain = (
-          {"context": retriever, "question": RunnablePassthrough()}
-             | prompt
-             | llm
-             | StrOutputParser()
-        )
+            chain = (
+              {"context": retriever, "question": RunnablePassthrough()}
+                 | prompt
+                 | llm
+                 | StrOutputParser()
+            )
+            
+            s4_5time = time.time()
+            response = chain.invoke(user_question)
+            s5time = time.time()
+            
+          # Display response
+          st.write("### Answer:")
+          st.write(response)
+          
+          # Display timing info
+          st.write("---")
+          st.caption(f":blue[Vector search duration: {round(s4time - s3time, 2)} sec]")
+          st.caption(f":blue[LLM response duration: {round(s5time - s4_5time, 2)} sec]")
+          st.caption(f":blue[Total query time: {round(s5time - s3time, 2)} sec]")
         
-        s4_5time = time.time()
-        response = chain.invoke(user_question)
-        s5time = time.time()
-        
-        # Display response
-        st.write("### Answer:")
-        st.write(response)
-        
-        # Display timing info only if PDF was uploaded this session
-        st.write("---")
-        st.caption(f":blue[Vector search duration: {round(s4time - s3time, 2)} sec]")
-        st.caption(f":blue[LLM response duration: {round(s5time - s4_5time, 2)} sec]")
-        st.caption(f":blue[Total query time: {round(s5time - s3time, 2)} sec]")
+        except Exception as e:
+          st.error(f"❌ Error processing query: {str(e)}")
+          st.exception(e)
 
 if __name__ == '__main__':
     main()

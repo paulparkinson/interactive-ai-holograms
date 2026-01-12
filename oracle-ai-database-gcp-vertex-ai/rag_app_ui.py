@@ -66,8 +66,12 @@ def main():
         wallet_location=wallet_dir,
         wallet_password=wpwd)
     
-    # Initialize model (needed for both new uploads and existing data)
-    model_4db = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    # Initialize Vertex AI (must be done before creating embeddings)
+    # Initialize Vertex AI SDK with values from environment
+    vertexai.init(project=project_id, location=region)
+    
+    # Use Vertex AI embeddings to match what's in the database (768 dimensions)
+    model_4db = VertexAIEmbeddings(model_name="text-embedding-004")
     
     # Check if table has existing data
     knowledge_base = None
@@ -114,15 +118,7 @@ def main():
       s2time =  time.time()
       st.success(f"✓ Uploaded and vectorized PDF in {round(s2time - s1time, 1)} seconds")
 
-    # Initialize Vertex AI SDK with values from environment
-    vertexai.init(project=project_id, location=region)
-
-        # Create embeddings
-        # Choice 1, Set the OCI GenAI LLM
-
-      # set the LLM to get response
-      # set docks to LLM and get answers
-      # set the LLM to get response
+    # Initialize LLM after Vertex AI is initialized
     llm = VertexAI(
         model_name="gemini-1.5-flash-002",
         max_output_tokens=8192,

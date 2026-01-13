@@ -101,8 +101,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
     servers=[
-        {"url": "http://localhost:8000", "description": "Local development server"},
-        {"url": "https://your-domain.com", "description": "Production server"}
+        {"url": "http://localhost:8501", "description": "Local development server"},
+        {"url": "http://34.48.146.146:8501", "description": "GCP production server"},
+        {"url": "https://your-domain.com", "description": "Custom domain (if configured)"}
     ]
 )
 
@@ -364,4 +365,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8501)

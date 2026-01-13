@@ -1,0 +1,4 @@
+google-cloud-aiplatform==1.70.0
+vertexai==1.70.0
+requests==2.32.3
+python-dotenv==1.0.1

@@ -132,6 +132,18 @@ def custom_openapi():
         servers=app.servers
     )
     
+    # Add bearer token security scheme for GCP compatibility
+    openapi_schema["components"]["securitySchemes"] = {
+        "bearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT"
+        }
+    }
+    
+    # Apply security to all endpoints
+    openapi_schema["security"] = [{"bearerAuth": []}]
+    
     # Ensure all responses have explicit application/json content type
     for path in openapi_schema.get("paths", {}).values():
         for operation in path.values():

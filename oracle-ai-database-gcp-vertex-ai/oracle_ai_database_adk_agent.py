@@ -45,10 +45,20 @@ class OracleRAGAgent:
             response = requests.post(
                 f"{self.api_url}/query",
                 json={"query": query, "top_k": top_k},
-                timeout=30
+                timeout=120  # Increased timeout for LLM processing
             )
             response.raise_for_status()
             return response.json()
+        except requests.exceptions.Timeout:
+            return {
+                "error": "Request timed out. The API might be processing a large query.",
+                "answer": "I couldn't retrieve information from the knowledge base (timeout). Please try again."
+            }
+        except requests.exceptions.ConnectionError as e:
+            return {
+                "error": f"Cannot connect to API at {self.api_url}. Is it running? {str(e)}",
+                "answer": "I couldn't connect to the knowledge base API. Please verify it's running."
+            }
         except requests.exceptions.RequestException as e:
             return {
                 "error": f"Failed to query Oracle RAG API: {str(e)}",
@@ -58,9 +68,11 @@ class OracleRAGAgent:
     def get_api_status(self) -> dict:
         """Get the status of the Oracle RAG API"""
         try:
-            response = requests.get(f"{self.api_url}/status", timeout=10)
+            response = requests.get(f"{self.api_url}/status", timeout=30)
             response.raise_for_status()
             return response.json()
+        except requests.exceptions.ConnectionError as e:
+            return {"error": f"Cannot connect to {self.api_url}", "status": "unavailable"}
         except requests.exceptions.RequestException as e:
             return {"error": str(e), "status": "unavailable"}
     

@@ -1,12 +1,12 @@
 streamlit
 python-dotenv
 PyPDF2
-langchain>=0.1.0
-langchain-core
-langchain-community
-langchain-text-splitters
+langchain>=1.0.0
+langchain-core>=1.2.0
+langchain-community>=0.4.0
+langchain-text-splitters>=1.1.0
 langchain-huggingface
-langchain-google-vertexai
+langchain-google-vertexai>=3.2.0
 oracledb
 tqdm
 google-cloud-aiplatform

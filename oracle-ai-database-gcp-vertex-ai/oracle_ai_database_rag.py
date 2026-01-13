@@ -115,6 +115,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Override OpenAPI schema to force version 3.0.3
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = app.openapi()
+    openapi_schema["openapi"] = "3.0.3"  # Force 3.0.3 instead of 3.1.0
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
 # Pydantic models for request/response
 class QueryRequest(BaseModel):
     """Request model for querying the knowledge base"""

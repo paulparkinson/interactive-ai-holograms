@@ -103,7 +103,7 @@ app = FastAPI(
     openapi_version="3.0.3",  # Force OpenAPI 3.0.3 for GCP compatibility
     lifespan=lifespan,
     servers=[
-        {"url": "http://34.48.146.146:8501", "description": "GCP production server"}
+        {"url": "http://10.150.0.8:8501", "description": "GCP internal VPC server"}
     ]
 )
 

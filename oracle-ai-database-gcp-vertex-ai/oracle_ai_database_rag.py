@@ -4,6 +4,7 @@ FastAPI service with OpenAPI endpoints for GCP Vertex AI Agents and ADK
 """
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict
 from dotenv import load_dotenv
@@ -119,8 +120,14 @@ app.add_middleware(
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
-    openapi_schema = app.openapi()
-    openapi_schema["openapi"] = "3.0.3"  # Force 3.0.3 instead of 3.1.0
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        openapi_version="3.0.3",  # Force 3.0.3
+        description=app.description,
+        routes=app.routes,
+        servers=app.servers
+    )
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 

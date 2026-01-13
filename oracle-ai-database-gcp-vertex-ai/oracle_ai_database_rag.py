@@ -2,7 +2,7 @@
 Oracle AI Database RAG API
 FastAPI service with OpenAPI endpoints for GCP Vertex AI Agents and ADK
 """
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel, Field
@@ -132,29 +132,28 @@ def custom_openapi():
         servers=app.servers
     )
     
-    # Add bearer token security scheme for GCP compatibility
-    openapi_schema["components"]["securitySchemes"] = {
-        "bearerAuth": {
-            "type": "http",
-            "scheme": "bearer",
-            "bearerFormat": "JWT"
-        }
-    }
-    
-    # Apply security to all endpoints
-    openapi_schema["security"] = [{"bearerAuth": []}]
+    # Remove security schemes - GCP agents don't allow them
+    if "securitySchemes" in openapi_schema.get("components", {}):
+        del openapi_schema["components"]["securitySchemes"]
+    if "security" in openapi_schema:
+        del openapi_schema["security"]
     
     # Ensure all responses have explicit application/json content type
     for path in openapi_schema.get("paths", {}).values():
         for operation in path.values():
-            if isinstance(operation, dict) and "responses" in operation:
-                for response in operation["responses"].values():
-                    if isinstance(response, dict) and "content" in response:
-                        # Ensure only application/json is present
-                        if "application/json" in response["content"]:
-                            response["content"] = {
-                                "application/json": response["content"]["application/json"]
-                            }
+            if isinstance(operation, dict):
+                # Remove security from individual operations
+                if "security" in operation:
+                    del operation["security"]
+                    
+                if "responses" in operation:
+                    for response in operation["responses"].values():
+                        if isinstance(response, dict) and "content" in response:
+                            # Ensure only application/json is present
+                            if "application/json" in response["content"]:
+                                response["content"] = {
+                                    "application/json": response["content"]["application/json"]
+                                }
     
     app.openapi_schema = openapi_schema
     return app.openapi_schema
@@ -248,7 +247,7 @@ async def get_status():
           summary="Query the knowledge base",
           description="Submit a question to search the document knowledge base and generate an answer using RAG. This endpoint performs vector similarity search on stored documents and uses Google Vertex AI to generate a contextual answer.",
           operation_id="query")
-async def query_knowledge_base(request: QueryRequest):
+async def query_knowledge_base(request: QueryRequest, authorization: Optional[str] = Header(None)):
     """
     Query the knowledge base with a question.
     
@@ -256,7 +255,12 @@ async def query_knowledge_base(request: QueryRequest):
     1. Performs vector similarity search to find relevant document chunks
     2. Uses retrieved context to generate an answer via Vertex AI LLM
     3. Returns the answer along with context and timing metrics
+    
+    Accepts optional Authorization header from GCP service agents (not validated).
     """
+    # Accept any authorization token without validation (for GCP compatibility)
+    # GCP sends service agent tokens - we just accept them
+    
     global knowledge_base, llm, embeddings
     
     if knowledge_base is None:

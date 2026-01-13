@@ -300,7 +300,8 @@ Answer:"""
           response_model=UploadResponse,
           summary="Upload PDF document",
           description="Upload a PDF document to be processed, chunked, vectorized and stored in the Oracle Database knowledge base. The document will be split into chunks and embedded using Vertex AI embeddings.",
-          operation_id="uploadDocument")
+          operation_id="uploadDocument",
+          include_in_schema=False)  # Exclude from OpenAPI for GCP compatibility
 async def upload_document(file: UploadFile = File(..., description="PDF file to upload and process")):
     """
     Upload and process a PDF document.

@@ -215,10 +215,17 @@ class OracleRAGFullAgent:
 - Additional data sources and tools
 - Enhanced multi-modal capabilities"""
         
-        # Create ADK LangchainAgent
+        # Tool routing dictionary
+        tool_functions = {
+            "query_oracle_database": query_oracle_database,
+            "check_knowledge_base_status": check_knowledge_base_status
+        }
+        
+        # Create ADK LangchainAgent with tools and instructions
         agent = reasoning_engines.LangchainAgent(
             model="gemini-2.0-flash-exp",
-            tools=tools,
+            tools=tool_functions,
+            system_instruction=instructions,
             agent_executor_kwargs={
                 "return_intermediate_steps": True,
                 "max_iterations": 10,  # Allow multi-step reasoning
@@ -230,15 +237,6 @@ class OracleRAGFullAgent:
                 "top_p": 0.95,
                 "top_k": 40
             }
-        )
-        
-        # Set up tool routing with our implementations
-        agent.set_up(
-            {
-                "query_oracle_database": query_oracle_database,
-                "check_knowledge_base_status": check_knowledge_base_status
-            },
-            instructions=instructions
         )
         
         return agent

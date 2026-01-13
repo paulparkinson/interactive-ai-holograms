@@ -7,7 +7,8 @@ import os
 import requests
 from dotenv import load_dotenv
 from google.cloud import aiplatform
-from vertexai.preview import reasoning_engines
+import vertexai
+from vertexai.generative_models import GenerativeModel, Tool, FunctionDeclaration
 from typing import Dict, Any
 
 # Load environment variables
@@ -32,11 +33,11 @@ class OracleRAGFullAgent:
         self.conversation_history = []
         
         # Initialize Vertex AI
-        aiplatform.init(project=project_id, location=location)
+        vertexai.init(project=project_id, location=location)
         
-        print("🤖 Initializing ADK Reasoning Engine...")
+        print("🤖 Initializing Gemini Agent with Function Calling...")
         self.agent = self.create_agent()
-        print("✓ ADK Agent ready!\n")
+        print("✓ Agent ready!\n")
         
     def query_oracle_rag(self, query: str, top_k: int = 5) -> dict:
         """
@@ -84,93 +85,47 @@ class OracleRAGFullAgent:
     
     def create_agent(self):
         """
-        Create a full ADK reasoning engine agent with Oracle RAG tools
+        Create a Gemini agent with function calling for Oracle RAG tools
         
         Returns:
-            Reasoning engine instance with full agent capabilities
+            GenerativeModel instance with function calling capabilities
         """
-        # Tool function implementations (closures that capture self)
-        def query_oracle_database(query: str, top_k: int = 5) -> str:
-            """
-            Query the Oracle Database knowledge base
-            
-            Args:
-                query: The search query about Oracle Database
-                top_k: Number of document chunks to retrieve (default: 5)
-                
-            Returns:
-                Answer with context metadata
-            """
-            print(f"  🔧 Tool called: query_oracle_database(query='{query[:50]}...', top_k={top_k})")
-            result = self.query_oracle_rag(query, top_k)
-            
-            if "error" in result:
-                return f"Error: {result['answer']}"
-            
-            # Format response with metadata
-            response = f"{result['answer']}\n\n"
-            response += f"[Source: {len(result.get('context_chunks', []))} document chunks, "
-            response += f"processed in {result.get('total_time', 0):.2f}s]"
-            
-            return response
-        
-        def check_knowledge_base_status() -> str:
-            """
-            Check the Oracle Database knowledge base status
-            
-            Returns:
-                Status information including document count and connectivity
-            """
-            print(f"  🔧 Tool called: check_knowledge_base_status()")
-            status = self.get_api_status()
-            
-            if "error" in status:
-                return f"Knowledge base unavailable: {status['error']}"
-            
-            return (
-                f"Knowledge Base Status:\n"
-                f"- Status: {status['status']}\n"
-                f"- Documents: {status['document_count']} chunks\n"
-                f"- Database: {'Connected' if status['database_connected'] else 'Disconnected'}\n"
-                f"- Models: {'Loaded' if status['models_loaded'] else 'Not loaded'}"
-            )
-        
-        # Define tools in ADK format
-        tools = [
-            {
-                "function_declarations": [
-                    {
-                        "name": "query_oracle_database",
-                        "description": "Search the Oracle Database knowledge base for information about Oracle Database features, spatial capabilities, vector search, JSON features, SQL enhancements, and other database topics. Use this for technical questions that require specific documentation or feature details.",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "query": {
-                                    "type": "string",
-                                    "description": "The detailed question or search query about Oracle Database"
-                                },
-                                "top_k": {
-                                    "type": "integer",
-                                    "description": "Number of relevant document chunks to retrieve (1-20). Use higher values for broad topics, lower for specific questions.",
-                                    "default": 5
-                                }
-                            },
-                            "required": ["query"]
-                        }
+        # Define function declarations for Gemini
+        query_oracle_function = FunctionDeclaration(
+            name="query_oracle_database",
+            description="Search the Oracle Database knowledge base for information about Oracle Database features, spatial capabilities, vector search, JSON features, SQL enhancements, and other database topics. Use this for technical questions that require specific documentation or feature details.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The detailed question or search query about Oracle Database"
                     },
-                    {
-                        "name": "check_knowledge_base_status",
-                        "description": "Check the status and availability of the Oracle Database knowledge base system, including document count, database connectivity, and model status. Use when users ask about system health or availability.",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {}
-                        }
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Number of relevant document chunks to retrieve (1-20). Use higher values for broad topics, lower for specific questions.",
+                        "default": 5
                     }
-                ]
+                },
+                "required": ["query"]
             }
-        ]
+        )
         
-        # Enhanced agent instructions for full reasoning
+        status_function = FunctionDeclaration(
+            name="check_knowledge_base_status",
+            description="Check the status and availability of the Oracle Database knowledge base system, including document count, database connectivity, and model status. Use when users ask about system health or availability.",
+            parameters={
+                "type": "object",
+                "properties": {}
+            }
+        )
+        
+        # Create tool with function declarations
+        oracle_tool = Tool(
+            function_declarations=[query_oracle_function, status_function]
+        )
+        
+        # Enhanced system instructions
         instructions = """You are an expert Oracle Database AI assistant with access to a comprehensive knowledge base.
 
 **Your Capabilities:**
@@ -199,47 +154,54 @@ class OracleRAGFullAgent:
 - Synthesize information from multiple sources
 - Ask clarifying questions if the user's intent is unclear
 
-**Conversation Flow:**
-- Remember context from previous questions in the conversation
-- Reference earlier responses when relevant
-- Build upon previous answers for follow-up questions
-
 **Response Style:**
 - Be concise but thorough
 - Cite specific features or capabilities when possible
-- If knowledge base doesn't have the answer, say so clearly and use general knowledge cautiously
+- If knowledge base doesn't have the answer, say so clearly
 - Format technical content clearly with examples when helpful
 
-**Future Capabilities (in development):**
-- Integration with MCP (Model Context Protocol) servers for extended functionality
-- Additional data sources and tools
-- Enhanced multi-modal capabilities"""
+Be helpful and technically accurate."""
         
-        # Tool routing dictionary
-        tool_functions = {
-            "query_oracle_database": query_oracle_database,
-            "check_knowledge_base_status": check_knowledge_base_status
-        }
-        
-        # Create ADK LangchainAgent with tools and instructions
-        agent = reasoning_engines.LangchainAgent(
-            model="gemini-2.0-flash-exp",
-            tools=tool_functions,
-            system_instruction=instructions,
-            agent_executor_kwargs={
-                "return_intermediate_steps": True,
-                "max_iterations": 10,  # Allow multi-step reasoning
-                "early_stopping_method": "generate"
-            },
-            model_kwargs={
-                "temperature": 0.7,
-                "max_output_tokens": 4096,  # Higher for detailed responses
-                "top_p": 0.95,
-                "top_k": 40
-            }
+        # Create Gemini model with tools
+        model = GenerativeModel(
+            "gemini-2.0-flash-exp",
+            tools=[oracle_tool],
+            system_instruction=instructions
         )
         
-        return agent
+        return model
+    
+    def execute_function_call(self, function_name: str, args: dict) -> str:
+        """Execute a function call from the agent"""
+        print(f"  🔧 Tool called: {function_name}({args})")
+        
+        if function_name == "query_oracle_database":
+            query = args.get("query", "")
+            top_k = args.get("top_k", 5)
+            result = self.query_oracle_rag(query, top_k)
+            
+            if "error" in result:
+                return f"Error: {result['answer']}"
+            
+            response = f"{result['answer']}\n\n"
+            response += f"[Source: {len(result.get('context_chunks', []))} document chunks, "
+            response += f"processed in {result.get('total_time', 0):.2f}s]"
+            return response
+            
+        elif function_name == "check_knowledge_base_status":
+            status = self.get_api_status()
+            if "error" in status:
+                return f"Knowledge base unavailable: {status['error']}"
+            
+            return (
+                f"Knowledge Base Status:\n"
+                f"- Status: {status['status']}\n"
+                f"- Documents: {status['document_count']} chunks\n"
+                f"- Database: {'Connected' if status['database_connected'] else 'Disconnected'}\n"
+                f"- Models: {'Loaded' if status['models_loaded'] else 'Not loaded'}"
+            )
+        
+        return f"Unknown function: {function_name}"
     
     def query(self, user_input: str) -> Dict[str, Any]:
         """
@@ -254,21 +216,44 @@ class OracleRAGFullAgent:
         try:
             print("🤔 Agent reasoning...\n")
             
-            # Query the ADK agent
-            response = self.agent.query(
-                input=user_input,
-                config={
-                    "return_intermediate_steps": True
-                }
-            )
+            # Start chat with the model
+            chat = self.agent.start_chat()
             
-            # Store in conversation history for context
+            # Send message
+            response = chat.send_message(user_input)
+            
+            # Handle function calls
+            max_iterations = 5
+            iteration = 0
+            
+            while response.candidates[0].content.parts[0].function_call and iteration < max_iterations:
+                iteration += 1
+                function_call = response.candidates[0].content.parts[0].function_call
+                function_name = function_call.name
+                function_args = dict(function_call.args)
+                
+                # Execute the function
+                function_response = self.execute_function_call(function_name, function_args)
+                
+                # Send function response back to model
+                from vertexai.generative_models import Part
+                response = chat.send_message(
+                    Part.from_function_response(
+                        name=function_name,
+                        response={"result": function_response}
+                    )
+                )
+            
+            # Get final text response
+            final_answer = response.text
+            
+            # Store in conversation history
             self.conversation_history.append({
                 "user": user_input,
-                "agent": response
+                "agent": {"output": final_answer}
             })
             
-            return response
+            return {"output": final_answer, "intermediate_steps": []}
             
         except Exception as e:
             return {

@@ -99,6 +99,7 @@ app = FastAPI(
     title="Oracle AI Database RAG API",
     description="RAG (Retrieval Augmented Generation) API using Oracle Database with Vector Search and Google Vertex AI. Suitable for integration with GCP Vertex AI Agents and Agent Development Kit (ADK).",
     version="1.0.0",
+    openapi_version="3.0.3",  # Force OpenAPI 3.0.3 for GCP compatibility
     lifespan=lifespan,
     servers=[
         {"url": "http://34.48.146.146:8501", "description": "GCP production server"}

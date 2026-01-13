@@ -1,7 +1,7 @@
 streamlit
 python-dotenv
 PyPDF2
-langchain
+langchain>=0.1.0
 langchain-core
 langchain-community
 langchain-text-splitters
@@ -12,3 +12,5 @@ tqdm
 google-cloud-aiplatform
 vertexai
 sentence-transformers
+fastapi
+uvicorn

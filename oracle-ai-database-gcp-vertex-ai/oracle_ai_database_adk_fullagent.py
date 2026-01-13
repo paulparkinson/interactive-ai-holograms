@@ -51,13 +51,28 @@ class OracleRAGFullAgent:
             Dictionary with answer and metadata
         """
         try:
+            payload = {"query": query, "top_k": top_k}
+            print(f"  → Sending to API: {payload}")
+            
             response = requests.post(
                 f"{self.api_url}/query",
-                json={"query": query, "top_k": top_k},
+                json=payload,
                 timeout=120
             )
+            
+            print(f"  ← API response status: {response.status_code}")
+            
+            if response.status_code != 200:
+                error_detail = response.text
+                print(f"  ← API error: {error_detail}")
+                return {
+                    "error": f"API returned {response.status_code}",
+                    "answer": f"API error ({response.status_code}): {error_detail[:200]}"
+                }
+            
             response.raise_for_status()
             return response.json()
+            
         except requests.exceptions.Timeout:
             return {
                 "error": "Request timed out",

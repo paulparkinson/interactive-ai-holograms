@@ -235,7 +235,7 @@ async def get_status():
           response_model=QueryResponse,
           summary="Query the knowledge base",
           description="Submit a question to search the document knowledge base and generate an answer using RAG. This endpoint performs vector similarity search on stored documents and uses Google Vertex AI to generate a contextual answer.",
-          operation_id="queryKnowledgeBase")
+          operation_id="query")
 async def query_knowledge_base(request: QueryRequest):
     """
     Query the knowledge base with a question.

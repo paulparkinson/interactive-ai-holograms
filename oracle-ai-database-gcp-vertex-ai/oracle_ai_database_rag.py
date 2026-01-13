@@ -131,6 +131,19 @@ def custom_openapi():
         routes=app.routes,
         servers=app.servers
     )
+    
+    # Ensure all responses have explicit application/json content type
+    for path in openapi_schema.get("paths", {}).values():
+        for operation in path.values():
+            if isinstance(operation, dict) and "responses" in operation:
+                for response in operation["responses"].values():
+                    if isinstance(response, dict) and "content" in response:
+                        # Ensure only application/json is present
+                        if "application/json" in response["content"]:
+                            response["content"] = {
+                                "application/json": response["content"]["application/json"]
+                            }
+    
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 

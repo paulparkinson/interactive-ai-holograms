@@ -11,4 +11,5 @@ echo "Starting Oracle AI Database RAG API on http://0.0.0.0:8501"
 echo "OpenAPI docs available at: http://0.0.0.0:8501/docs"
 echo "Alternative docs at: http://0.0.0.0:8501/redoc"
 
-uvicorn oracle_ai_database_rag:app --host 0.0.0.0 --port 8501 --reload
+# Use --log-level warning to suppress INFO logs for health checks
+uvicorn oracle_ai_database_rag:app --host 0.0.0.0 --port 8501 --reload --log-level warning --access-log

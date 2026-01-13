@@ -2,7 +2,8 @@
 Oracle AI Database RAG API
 FastAPI service with OpenAPI endpoints for GCP Vertex AI Agents and ADK
 """
-from fastapi import FastAPI, HTTPException, UploadFile, File, Header
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel, Field
@@ -119,6 +120,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Security scheme that accepts any bearer token (for GCP compatibility)
+security = HTTPBearer(auto_error=False)
+
+async def verify_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
+    """
+    Accept any bearer token without validation.
+    GCP Vertex AI agents send service tokens - we accept them without verification.
+    """
+    # Simply return - no validation needed
+    return credentials
+
 # Override OpenAPI schema to force version 3.0.3
 def custom_openapi():
     if app.openapi_schema:
@@ -138,6 +150,51 @@ def custom_openapi():
     if "security" in openapi_schema:
         del openapi_schema["security"]
     
+    # Clean up schema components to remove invalid types
+    def clean_schema(schema_obj):
+        """Recursively clean schema objects to remove invalid types"""
+        if not isinstance(schema_obj, dict):
+            return schema_obj
+        
+        # Remove null types and anyOf/oneOf with null
+        if "type" in schema_obj:
+            if isinstance(schema_obj["type"], list):
+                # Remove 'null' from type arrays
+                schema_obj["type"] = [t for t in schema_obj["type"] if t != "null"]
+                if len(schema_obj["type"]) == 1:
+                    schema_obj["type"] = schema_obj["type"][0]
+            elif schema_obj["type"] == "null":
+                # Remove null-only types
+                del schema_obj["type"]
+        
+        # Handle anyOf/oneOf with null
+        for key in ["anyOf", "oneOf"]:
+            if key in schema_obj:
+                schema_obj[key] = [s for s in schema_obj[key] if s.get("type") != "null"]
+                if len(schema_obj[key]) == 1:
+                    # Flatten single-item anyOf/oneOf
+                    only_schema = schema_obj[key][0]
+                    del schema_obj[key]
+                    schema_obj.update(only_schema)
+                elif len(schema_obj[key]) == 0:
+                    del schema_obj[key]
+        
+        # Recursively clean nested objects
+        for key, value in list(schema_obj.items()):
+            if isinstance(value, dict):
+                clean_schema(value)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, dict):
+                        clean_schema(item)
+        
+        return schema_obj
+    
+    # Clean all schema components
+    if "components" in openapi_schema and "schemas" in openapi_schema["components"]:
+        for schema_name, schema_def in openapi_schema["components"]["schemas"].items():
+            clean_schema(schema_def)
+    
     # Ensure all responses have explicit application/json content type
     for path in openapi_schema.get("paths", {}).values():
         for operation in path.values():
@@ -145,15 +202,22 @@ def custom_openapi():
                 # Remove security from individual operations
                 if "security" in operation:
                     del operation["security"]
-                    
+                
+                # Clean request body schemas
+                if "requestBody" in operation:
+                    clean_schema(operation["requestBody"])
+                
+                # Clean response schemas
                 if "responses" in operation:
                     for response in operation["responses"].values():
-                        if isinstance(response, dict) and "content" in response:
-                            # Ensure only application/json is present
-                            if "application/json" in response["content"]:
-                                response["content"] = {
-                                    "application/json": response["content"]["application/json"]
-                                }
+                        if isinstance(response, dict):
+                            clean_schema(response)
+                            if "content" in response:
+                                # Ensure only application/json is present
+                                if "application/json" in response["content"]:
+                                    response["content"] = {
+                                        "application/json": response["content"]["application/json"]
+                                    }
     
     app.openapi_schema = openapi_schema
     return app.openapi_schema
@@ -247,7 +311,10 @@ async def get_status():
           summary="Query the knowledge base",
           description="Submit a question to search the document knowledge base and generate an answer using RAG. This endpoint performs vector similarity search on stored documents and uses Google Vertex AI to generate a contextual answer.",
           operation_id="query")
-async def query_knowledge_base(request: QueryRequest, authorization: Optional[str] = Header(None)):
+async def query_knowledge_base(
+    request: QueryRequest,
+    token: Optional[HTTPAuthorizationCredentials] = Depends(verify_token)
+):
     """
     Query the knowledge base with a question.
     
@@ -256,11 +323,8 @@ async def query_knowledge_base(request: QueryRequest, authorization: Optional[st
     2. Uses retrieved context to generate an answer via Vertex AI LLM
     3. Returns the answer along with context and timing metrics
     
-    Accepts optional Authorization header from GCP service agents (not validated).
+    Accepts bearer tokens from GCP service agents without validation.
     """
-    # Accept any authorization token without validation (for GCP compatibility)
-    # GCP sends service agent tokens - we just accept them
-    
     global knowledge_base, llm, embeddings
     
     if knowledge_base is None:

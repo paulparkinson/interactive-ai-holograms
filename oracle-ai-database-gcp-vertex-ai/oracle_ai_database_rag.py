@@ -107,6 +107,9 @@ app = FastAPI(
     ]
 )
 
+# Configure to generate OpenAPI 3.0 compatible schemas (no "null" types)
+app.openapi_version = "3.0.3"
+
 # Add CORS middleware for agent access
 app.add_middleware(
     CORSMiddleware,
@@ -141,8 +144,8 @@ class QueryRequest(BaseModel):
         description="The question to ask about the documents in the knowledge base",
         example="What are the new spatial features in Oracle Database?"
     )
-    top_k: Optional[int] = Field(
-        5, 
+    top_k: int = Field(
+        default=5, 
         description="Number of similar document chunks to retrieve",
         ge=1,
         le=20

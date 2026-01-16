@@ -266,7 +266,8 @@ Be concise, helpful, and technically accurate. Combine information from both sou
                     # Process query
                     response = await runner.run_async(
                         session_id=session_id,
-                        new_message=user_input
+                        new_message=user_input,
+                        user_id="cli_user"
                     )
                     
                     print(f"\nAgent: {response.output}\n")

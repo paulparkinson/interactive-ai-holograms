@@ -83,6 +83,14 @@ class OracleRAGAgent:
         """Get the status of the Oracle RAG API"""
         try:
             response = requests.get(f"{self.api_url}/status", timeout=30)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            return {
+                "error": f"Failed to get API status: {str(e)}",
+                "status": "unavailable"
+            }
+    
     async def create_agent_async(self):
         """
         Create an ADK agent with Oracle RAG API and MCP database tools

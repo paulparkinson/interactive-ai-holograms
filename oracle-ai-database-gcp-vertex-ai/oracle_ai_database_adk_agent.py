@@ -9,12 +9,8 @@ import asyncio
 import requests
 from dotenv import load_dotenv
 import vertexai
-from google.adk.agents import LlmAgent
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
-from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
-from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioConnectionParams, StdioServerParameters
-from google.genai import types
+from vertexai.generative_models import GenerativeModel, Tool, FunctionDeclaration
+from typing import Dict, Any
 
 # Load environment variables
 load_dotenv()
@@ -40,10 +36,8 @@ class OracleRAGAgent:
         self.location = location
         self.sqlcl_path = sqlcl_path
         self.wallet_path = wallet_path or os.path.expanduser("~/wallet")
-        
-        # Session and artifact services for ADK
-        self.session_service = InMemorySessionService()
-        self.artifacts_service = InMemoryArtifactService()
+        self.agent = None
+        self.conversation_history = []
         
     def query_oracle_rag(self, query: str, top_k: int = 5) -> dict:
         """
@@ -94,85 +88,136 @@ class OracleRAGAgent:
     
     async def create_agent_async(self):
         """
-        Create an ADK agent with Oracle RAG API and MCP database tools
+        Create an agent with Oracle RAG API and MCP database tools
         
         Returns:
-            LlmAgent instance configured with both RAG and MCP tools
+            GenerativeModel instance configured with tools
         """
         # Initialize Vertex AI
         vertexai.init(project=self.project_id, location=self.location)
         
-        # Configure Oracle MCP server parameters
-        oracle_mcp_params = StdioConnectionParams(
-            server_params=StdioServerParameters(
-                command=self.sqlcl_path,
-                args=["-mcp"],
-                env={"TNS_ADMIN": self.wallet_path}
-            )
+        # Define function declarations for RAG tool
+        query_oracle_function = FunctionDeclaration(
+            name="query_oracle_database",
+            description="Search the Oracle Database knowledge base for information about Oracle Database features, spatial capabilities, vector search, JSON features, SQL enhancements, and other database topics.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The detailed question or search query about Oracle Database"
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Number of relevant document chunks to retrieve (1-20). Use higher values for broad topics, lower for specific questions.",
+                        "default": 5
+                    }
+                },
+                "required": ["query"]
+            }
         )
         
-        # Define agent instructions
-        instructions = """You are a helpful assistant specializing in Oracle Database.
-
-You have access to two complementary tools:
-
-1. **Oracle RAG Knowledge Base (query_oracle_rag_kb)**: Use this to search documentation and find 
-   information about Oracle Database features, capabilities, spatial functions, vector search, 
-   and other conceptual/documentation topics.
-
-2. **Oracle MCP Database Server**: Use these tools for direct database operations like:
-   - Running SQL queries (list-connections, connect, run-sql, run-sqlcl)
-   - Checking database schema (schema-information)
-   - Viewing connection status and database metadata
-   - Executing database commands
-
-**When to use each tool:**
-- For "what is" or "how to" questions → use query_oracle_rag_kb
-- For "show me data", "list tables", "query database" → use MCP database tools
-- The MCP server connection is: paulparkdb_mcp
-- Always connect to paulparkdb_mcp before running database queries
-
-Be concise, helpful, and technically accurate. Combine information from both sources when appropriate."""
-        
-        # Create ADK agent with MCP toolset
-        # Note: Temporarily disabling MCP tools due to schema conversion issue
-        # TODO: Re-enable once ADK MCP integration is fixed
-        agent = LlmAgent(
-            model="gemini-2.0-flash-exp",
-            name="oracle_ai_assistant",
-            instruction=instructions,
-            tools=[
-                self._create_rag_tool()
-                # McpToolset(connection_params=oracle_mcp_params),  # Disabled temporarily
-            ]
+        # Create tool with function declarations
+        oracle_tool = Tool(
+            function_declarations=[query_oracle_function]
         )
         
-        return agent
+        # Enhanced system instructions
+        instructions = """You are an expert Oracle Database AI assistant with access to a comprehensive knowledge base.
+
+**Your Capabilities:**
+- Access to Oracle Database documentation through the knowledge base
+- Ability to answer questions about Oracle features, SQL, and database functionality
+
+**When to Use Tools:**
+Use `query_oracle_database` when users ask about:
+- Specific Oracle Database features or functionality
+- SQL syntax, commands, or best practices
+- Database configuration or administration
+- Performance optimization
+- New features in recent Oracle versions
+- Technical implementation details
+
+**Response Style:**
+- Be concise but thorough
+- Cite specific features or capabilities when possible
+- If knowledge base doesn't have the answer, say so clearly
+- Format technical content clearly with examples when helpful
+
+Be helpful and technically accurate."""
+        
+        # Create Gemini model with tools
+        model = GenerativeModel(
+            "gemini-2.0-flash-exp",
+            tools=[oracle_tool],
+            system_instruction=instructions
+        )
+        
+        return model
     
-    def _create_rag_tool(self):
-        """Create custom RAG tool as a Python function for ADK"""
-        def query_oracle_rag_kb(query: str, top_k: int = 5) -> str:
-            """
-            Search the Oracle Database knowledge base for documentation and feature information.
-            
-            Args:
-                query: The question or search query about Oracle Database
-                top_k: Number of relevant document chunks to retrieve (1-20)
-            
-            Returns:
-                Answer with context from documentation
-            """
+    def execute_function_call(self, function_name: str, args: dict) -> str:
+        """Execute a function call from the agent"""
+        if function_name == "query_oracle_database":
+            query = args.get("query", "")
+            top_k = args.get("top_k", 5)
             result = self.query_oracle_rag(query, top_k)
+            
             if "error" in result:
-                return f"Error accessing knowledge base: {result['answer']}"
+                return f"Error: {result['answer']}"
             
-            answer = result['answer']
-            chunks = len(result.get('context_chunks', []))
-            time_taken = result.get('total_time', 0)
-            
-            return f"{answer}\n\n[Source: Retrieved from {chunks} documentation chunks in {time_taken:.2f}s]"
+            response = f"{result['answer']}\n\n"
+            response += f"[Source: {len(result.get('context_chunks', []))} document chunks, "
+            response += f"processed in {result.get('total_time', 0):.2f}s]"
+            return response
         
-        return query_oracle_rag_kb
+        return f"Unknown function: {function_name}"
+    
+    def query_sync(self, user_input: str) -> Dict[str, Any]:
+        """
+        Query the agent with function calling
+        
+        Args:
+            user_input: User's question or request
+            
+        Returns:
+            Agent response
+        """
+        try:
+            # Start chat with the model
+            chat = self.agent.start_chat()
+            
+            # Send message
+            response = chat.send_message(user_input)
+            
+            # Handle function calls
+            max_iterations = 5
+            iteration = 0
+            
+            while response.candidates[0].content.parts[0].function_call and iteration < max_iterations:
+                iteration += 1
+                function_call = response.candidates[0].content.parts[0].function_call
+                function_name = function_call.name
+                function_args = dict(function_call.args)
+                
+                # Execute the function
+                function_response = self.execute_function_call(function_name, function_args)
+                
+                # Send function response back to model
+                from vertexai.generative_models import Part
+                response = chat.send_message(
+                    Part.from_function_response(
+                        name=function_name,
+                        response={"result": function_response}
+                    )
+                )
+            
+            # Get final text response
+            final_answer = response.text
+            
+            return {"output": final_answer}
+            
+        except Exception as e:
+            return {"output": f"Error during agent reasoning: {str(e)}"}
     
     def run_cli(self):
         """Run interactive CLI interface"""
@@ -195,13 +240,11 @@ Be concise, helpful, and technically accurate. Combine information from both sou
         print()
         print("Type your questions about Oracle Database (or 'quit' to exit)")
     async def run_cli_async(self):
-        """Run interactive CLI interface with ADK agent"""
+        """Run interactive CLI interface"""
         print("=" * 80)
-        print("Oracle Database AI Agent with MCP (powered by Google ADK)")
+        print("Oracle Database AI Agent with RAG")
         print("=" * 80)
         print(f"RAG API URL: {self.api_url}")
-        print(f"SQLcl Path: {self.sqlcl_path}")
-        print(f"Wallet Path: {self.wallet_path}")
         print(f"Project: {self.project_id}")
         print(f"Region: {self.location}")
         print()
@@ -215,43 +258,18 @@ Be concise, helpful, and technically accurate. Combine information from both sou
             print(f"⚠️  Warning: {status.get('error', 'RAG API unavailable')}")
         
         print()
-        print("🔧 Initializing ADK agent with MCP tools...")
+        print("🔧 Initializing agent...")
         
         try:
-            agent = await self.create_agent_async()
+            self.agent = await self.create_agent_async()
             print("✓ Agent initialized successfully!")
             print()
             print("Available capabilities:")
             print("  - Search Oracle documentation (RAG)")
-            print("  - Note: MCP database tools temporarily disabled due to schema compatibility")
-            # print("  - Query database directly (MCP: paulparkdb_mcp)")
-            # print("  - List connections, run SQL, check schema")
             print()
             print("Type your questions about Oracle Database (or 'quit' to exit)")
             print("-" * 80)
             print()
-            
-            # Create session
-            session = await self.session_service.create_session(
-                state={},
-                app_name="oracle_ai_agent",
-                user_id="cli_user"
-            )
-            
-            # Use 'id' or 'session_id' depending on ADK version
-            session_id = getattr(session, "session_id", getattr(session, "id", None))
-            if not session_id:
-                # Fallback for debug
-                print(f"Warning: Could not determine session ID from session object: {dir(session)}")
-                session_id = str(session) # Last resort
-            
-            # Create runner
-            runner = Runner(
-                agent=agent,
-                app_name="oracle_ai_agent",
-                session_service=self.session_service,
-                artifact_service=self.artifacts_service
-            )
             
             # Interactive loop
             while True:
@@ -266,17 +284,8 @@ Be concise, helpful, and technically accurate. Combine information from both sou
                         break
                     
                     # Process query
-                    final_response = None
-                    new_message = types.Content(role="user", parts=[types.Part(text=user_input)])
-                    async for response in runner.run_async(
-                        session_id=session_id,
-                        new_message=new_message,
-                        user_id="cli_user"
-                    ):
-                        final_response = response
-                    
-                    if final_response:
-                        print(f"\nAgent: {final_response.output}\n")
+                    response = self.query_sync(user_input)
+                    print(f"\nAgent: {response['output']}\n")
                     
                 except KeyboardInterrupt:
                     print("\n\nInterrupted. Goodbye!")

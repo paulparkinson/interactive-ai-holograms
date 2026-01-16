@@ -264,13 +264,16 @@ Be concise, helpful, and technically accurate. Combine information from both sou
                         break
                     
                     # Process query
-                    response = await runner.run_async(
+                    final_response = None
+                    async for response in runner.run_async(
                         session_id=session_id,
                         new_message=user_input,
                         user_id="cli_user"
-                    )
+                    ):
+                        final_response = response
                     
-                    print(f"\nAgent: {response.output}\n")
+                    if final_response:
+                        print(f"\nAgent: {final_response.output}\n")
                     
                 except KeyboardInterrupt:
                     print("\n\nInterrupted. Goodbye!")

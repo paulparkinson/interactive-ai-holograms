@@ -7,10 +7,12 @@ Google Agent Development Kit (ADK) agent that uses:
 import os
 import asyncio
 import requests
+import json
+import subprocess
 from dotenv import load_dotenv
 import vertexai
-from vertexai.generative_models import GenerativeModel, Tool, FunctionDeclaration
-from typing import Dict, Any
+from vertexai.generative_models import GenerativeModel, Tool, FunctionDeclaration, Part
+from typing import Dict, Any, List, Optional
 
 # Load environment variables
 load_dotenv()
@@ -38,6 +40,9 @@ class OracleRAGAgent:
         self.wallet_path = wallet_path or os.path.expanduser("~/wallet")
         self.agent = None
         self.conversation_history = []
+        self.mcp_process = None
+        self.mcp_tools = []
+        self.next_mcp_id = 1
         
     def query_oracle_rag(self, query: str, top_k: int = 5) -> dict:
         """
@@ -86,6 +91,105 @@ class OracleRAGAgent:
                 "status": "unavailable"
             }
     
+    async def start_mcp_server(self):
+        """Start the SQLcl MCP server"""
+        try:
+            env = os.environ.copy()
+            env["TNS_ADMIN"] = self.wallet_path
+            
+            self.mcp_process = await asyncio.create_subprocess_exec(
+                self.sqlcl_path, "-mcp",
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env
+            )
+            
+            # Initialize MCP session
+            init_request = {
+                "jsonrpc": "2.0",
+                "id": self.next_mcp_id,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {
+                        "name": "oracle_ai_agent",
+                        "version": "1.0.0"
+                    }
+                }
+            }
+            self.next_mcp_id += 1
+            
+            # Send initialize request
+            self.mcp_process.stdin.write((json.dumps(init_request) + "\n").encode())
+            await self.mcp_process.stdin.drain()
+            
+            # Read response
+            response_line = await self.mcp_process.stdout.readline()
+            
+            # List available tools
+            tools_request = {
+                "jsonrpc": "2.0",
+                "id": self.next_mcp_id,
+                "method": "tools/list",
+                "params": {}
+            }
+            self.next_mcp_id += 1
+            
+            self.mcp_process.stdin.write((json.dumps(tools_request) + "\n").encode())
+            await self.mcp_process.stdin.drain()
+            
+            # Read tools response
+            tools_response = await self.mcp_process.stdout.readline()
+            tools_data = json.loads(tools_response.decode())
+            
+            if "result" in tools_data and "tools" in tools_data["result"]:
+                self.mcp_tools = tools_data["result"]["tools"]
+                return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"Failed to start MCP server: {str(e)}")
+            return False
+    
+    async def call_mcp_tool(self, tool_name: str, arguments: dict) -> str:
+        """Call an MCP tool"""
+        try:
+            request = {
+                "jsonrpc": "2.0",
+                "id": self.next_mcp_id,
+                "method": "tools/call",
+                "params": {
+                    "name": tool_name,
+                    "arguments": arguments
+                }
+            }
+            self.next_mcp_id += 1
+            
+            self.mcp_process.stdin.write((json.dumps(request) + "\n").encode())
+            await self.mcp_process.stdin.drain()
+            
+            # Read response
+            response_line = await self.mcp_process.stdout.readline()
+            response_data = json.loads(response_line.decode())
+            
+            if "result" in response_data:
+                return json.dumps(response_data["result"])
+            elif "error" in response_data:
+                return f"Error: {response_data['error']}"
+            
+            return "No response from MCP tool"
+            
+        except Exception as e:
+            return f"Error calling MCP tool: {str(e)}"
+    
+    def stop_mcp_server(self):
+        """Stop the MCP server"""
+        if self.mcp_process:
+            self.mcp_process.terminate()
+    
     async def create_agent_async(self):
         """
         Create an agent with Oracle RAG API and MCP database tools
@@ -96,8 +200,14 @@ class OracleRAGAgent:
         # Initialize Vertex AI
         vertexai.init(project=self.project_id, location=self.location)
         
-        # Define function declarations for RAG tool
-        query_oracle_function = FunctionDeclaration(
+        # Start MCP server and get tools
+        print("  → Starting MCP server...")
+        mcp_started = await self.start_mcp_server()
+        
+        function_declarations = []
+        
+        # Add RAG function
+        function_declarations.append(FunctionDeclaration(
             name="query_oracle_database",
             description="Search the Oracle Database knowledge base for information about Oracle Database features, spatial capabilities, vector search, JSON features, SQL enhancements, and other database topics.",
             parameters={
@@ -109,42 +219,62 @@ class OracleRAGAgent:
                     },
                     "top_k": {
                         "type": "integer",
-                        "description": "Number of relevant document chunks to retrieve (1-20). Use higher values for broad topics, lower for specific questions.",
+                        "description": "Number of relevant document chunks to retrieve (1-20).",
                         "default": 5
                     }
                 },
                 "required": ["query"]
             }
-        )
+        ))
         
-        # Create tool with function declarations
-        oracle_tool = Tool(
-            function_declarations=[query_oracle_function]
-        )
+        # Add MCP tools if server started successfully
+        if mcp_started and self.mcp_tools:
+            print(f"  → Found {len(self.mcp_tools)} MCP tools")
+            for mcp_tool in self.mcp_tools[:5]:  # Limit to first 5 tools to avoid overwhelming the model
+                # Convert MCP tool schema to Gemini function declaration
+                tool_name = mcp_tool.get("name", "")
+                tool_desc = mcp_tool.get("description", "")
+                tool_schema = mcp_tool.get("inputSchema", {})
+                
+                # Simplify schema for Gemini
+                properties = {}
+                required = []
+                
+                if "properties" in tool_schema:
+                    for prop_name, prop_def in tool_schema["properties"].items():
+                        properties[prop_name] = {
+                            "type": prop_def.get("type", "string"),
+                            "description": prop_def.get("description", "")
+                        }
+                
+                if "required" in tool_schema:
+                    required = tool_schema["required"]
+                
+                function_declarations.append(FunctionDeclaration(
+                    name=f"mcp_{tool_name}",
+                    description=f"[MCP Tool] {tool_desc}",
+                    parameters={
+                        "type": "object",
+                        "properties": properties,
+                        "required": required
+                    }
+                ))
+        
+        # Create tool with all function declarations
+        oracle_tool = Tool(function_declarations=function_declarations)
         
         # Enhanced system instructions
-        instructions = """You are an expert Oracle Database AI assistant with access to a comprehensive knowledge base.
+        instructions = """You are an expert Oracle Database AI assistant with access to:
 
-**Your Capabilities:**
-- Access to Oracle Database documentation through the knowledge base
-- Ability to answer questions about Oracle features, SQL, and database functionality
+1. **Knowledge Base (query_oracle_database)**: Search documentation about Oracle features
+2. **MCP Database Tools (mcp_*)**: Direct database operations (list connections, run SQL, check schema)
 
-**When to Use Tools:**
-Use `query_oracle_database` when users ask about:
-- Specific Oracle Database features or functionality
-- SQL syntax, commands, or best practices
-- Database configuration or administration
-- Performance optimization
-- New features in recent Oracle versions
-- Technical implementation details
+**When to use each:**
+- For "what is" or "how to" questions → use query_oracle_database  
+- For "show me data", "list tables", "query database" → use mcp_* tools
+- For database operations, use mcp_list-connections first, then mcp_connect, then other operations
 
-**Response Style:**
-- Be concise but thorough
-- Cite specific features or capabilities when possible
-- If knowledge base doesn't have the answer, say so clearly
-- Format technical content clearly with examples when helpful
-
-Be helpful and technically accurate."""
+Be concise, helpful, and technically accurate."""
         
         # Create Gemini model with tools
         model = GenerativeModel(
@@ -169,6 +299,14 @@ Be helpful and technically accurate."""
             response += f"[Source: {len(result.get('context_chunks', []))} document chunks, "
             response += f"processed in {result.get('total_time', 0):.2f}s]"
             return response
+        
+        # Check if it's an MCP tool
+        if function_name.startswith("mcp_"):
+            actual_tool_name = function_name[4:]  # Remove "mcp_" prefix
+            # Need to call async function, so return a placeholder
+            # This will be handled in the async version
+            loop = asyncio.get_event_loop()
+            return loop.run_until_complete(self.call_mcp_tool(actual_tool_name, args))
         
         return f"Unknown function: {function_name}"
     
@@ -217,7 +355,13 @@ Be helpful and technically accurate."""
             return {"output": final_answer}
             
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return {"output": f"Error during agent reasoning: {str(e)}"}
+    
+    def cleanup(self):
+        """Cleanup resources"""
+        self.stop_mcp_server()
     
     def run_cli(self):
         """Run interactive CLI interface"""
@@ -242,9 +386,11 @@ Be helpful and technically accurate."""
     async def run_cli_async(self):
         """Run interactive CLI interface"""
         print("=" * 80)
-        print("Oracle Database AI Agent with RAG")
+        print("Oracle Database AI Agent with RAG + MCP")
         print("=" * 80)
         print(f"RAG API URL: {self.api_url}")
+        print(f"SQLcl Path: {self.sqlcl_path}")
+        print(f"Wallet Path: {self.wallet_path}")
         print(f"Project: {self.project_id}")
         print(f"Region: {self.location}")
         print()
@@ -258,7 +404,7 @@ Be helpful and technically accurate."""
             print(f"⚠️  Warning: {status.get('error', 'RAG API unavailable')}")
         
         print()
-        print("🔧 Initializing agent...")
+        print("🔧 Initializing agent with MCP tools...")
         
         try:
             self.agent = await self.create_agent_async()
@@ -266,6 +412,8 @@ Be helpful and technically accurate."""
             print()
             print("Available capabilities:")
             print("  - Search Oracle documentation (RAG)")
+            if self.mcp_tools:
+                print(f"  - {len(self.mcp_tools)} MCP database tools (list-connections, connect, run-sql, etc.)")
             print()
             print("Type your questions about Oracle Database (or 'quit' to exit)")
             print("-" * 80)
@@ -295,11 +443,15 @@ Be helpful and technically accurate."""
                     import traceback
                     traceback.print_exc()
                     continue
+            
+            # Cleanup
+            self.cleanup()
                     
         except Exception as e:
             print(f"\n❌ Failed to initialize agent: {str(e)}")
             import traceback
             traceback.print_exc()
+            self.cleanup()
 
 async def main():
     """Main entry point"""

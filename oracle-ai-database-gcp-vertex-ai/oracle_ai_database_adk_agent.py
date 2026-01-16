@@ -248,8 +248,26 @@ Be concise, helpful, and technically accurate. Combine information from both sou
                         print("\nGoodbye!")
                         break
                     
-                    # Create message content
-                    content = types.Content(
+                    # Process query
+                    response = await runner.run_async(
+                        session_id=session.session_id,
+                        new_message=user_input
+                    )
+                    
+                    print(f"\nAgent: {response.output}\n")
+                    
+                except KeyboardInterrupt:
+                    print("\n\nInterrupted. Goodbye!")
+                    break
+                except Exception as e:
+                    print(f"\nError: {str(e)}\n")
+                    continue
+                    
+        except Exception as e:
+            print(f"\n❌ Failed to initialize agent: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
 async def main():
     """Main entry point"""
     # Configuration

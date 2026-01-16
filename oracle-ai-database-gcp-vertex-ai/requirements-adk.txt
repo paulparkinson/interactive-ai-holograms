@@ -8,5 +8,5 @@ google-cloud-aiplatform>=1.132.0
 vertexai>=1.70.0
 
 # Utilities
-requests==2.32.3
+requests>=2.32.4
 python-dotenv==1.0.1

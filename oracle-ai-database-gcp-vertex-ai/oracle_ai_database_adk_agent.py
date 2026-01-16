@@ -12,7 +12,8 @@ from google.adk.agents import LlmAgent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
-from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParameters
+from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioServerParameters
+from google.adk.tools.mcp_tool import StdioConnectionParams
 from google.genai import types
 
 # Load environment variables
@@ -105,6 +106,11 @@ class OracleRAGMCPAgent:
             env={"TNS_ADMIN": self.wallet_path}
         )
         
+        # Wrap in StdioConnectionParams (recommended pattern)
+        mcp_connection_params = StdioConnectionParams(
+            server_params=mcp_server_params
+        )
+        
         # Define agent instruction
         instruction = """You are an expert Oracle Database AI assistant with access to:
 
@@ -112,22 +118,21 @@ class OracleRAGMCPAgent:
 2. **MCP Database Tools**: Direct database operations via Oracle SQLcl MCP server
 
 **Usage Strategy:**
-- Documentation questions ("what is", "how to", "explain") → query_oracle_database_docs
-- Data queries ("show", "list tables", "run SQL", "get schema") → MCP tools
+- Data queries ("show", "list tables", "run SQL", "get schema") → use MCP tools
 - For database operations: list-connections → connect → run-sql or schema-information
+- Documentation questions can be answered from your knowledge or by querying the database
 
 Always be helpful, concise, and technically accurate."""
         
         print("  → Creating ADK LlmAgent with MCP integration...")
         
-        # Create agent with MCP tools directly via MCPToolset
-        # This is the key pattern from official examples!
+        # Create agent with MCP tools directly via McpToolset
+        # Following official ADK MCP pattern
         self.agent = LlmAgent(
             model="gemini-2.0-flash-exp",
             name="oracle_assistant",
             instruction=instruction,
-            tools=[MCPToolset(connection_params=mcp_server_params)],  # MCP tools added here!
-            functions=[self.query_oracle_database_docs]  # Custom function for RAG
+            tools=[McpToolset(connection_params=mcp_connection_params)]
         )
         
         print("  ✓ Agent created with MCP toolset")

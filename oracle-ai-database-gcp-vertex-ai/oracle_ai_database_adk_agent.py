@@ -105,6 +105,9 @@ class OracleRAGAgent:
                 env=env
             )
             
+            # Wait a bit for server to start
+            await asyncio.sleep(2)
+            
             # Initialize MCP session
             init_request = {
                 "jsonrpc": "2.0",
@@ -125,8 +128,15 @@ class OracleRAGAgent:
             self.mcp_process.stdin.write((json.dumps(init_request) + "\n").encode())
             await self.mcp_process.stdin.drain()
             
-            # Read response
-            response_line = await self.mcp_process.stdout.readline()
+            # Read response with timeout
+            try:
+                response_line = await asyncio.wait_for(
+                    self.mcp_process.stdout.readline(),
+                    timeout=5.0
+                )
+            except asyncio.TimeoutError:
+                print("  ⚠️  MCP server initialization timed out")
+                return False
             
             # List available tools
             tools_request = {
@@ -140,18 +150,25 @@ class OracleRAGAgent:
             self.mcp_process.stdin.write((json.dumps(tools_request) + "\n").encode())
             await self.mcp_process.stdin.drain()
             
-            # Read tools response
-            tools_response = await self.mcp_process.stdout.readline()
-            tools_data = json.loads(tools_response.decode())
-            
-            if "result" in tools_data and "tools" in tools_data["result"]:
-                self.mcp_tools = tools_data["result"]["tools"]
-                return True
+            # Read tools response with timeout
+            try:
+                tools_response = await asyncio.wait_for(
+                    self.mcp_process.stdout.readline(),
+                    timeout=5.0
+                )
+                tools_data = json.loads(tools_response.decode())
+                
+                if "result" in tools_data and "tools" in tools_data["result"]:
+                    self.mcp_tools = tools_data["result"]["tools"]
+                    return True
+            except asyncio.TimeoutError:
+                print("  ⚠️  MCP tools list request timed out")
+                return False
             
             return False
             
         except Exception as e:
-            print(f"Failed to start MCP server: {str(e)}")
+            print(f"  ⚠️  Failed to start MCP server: {str(e)}")
             return False
     
     async def call_mcp_tool(self, tool_name: str, arguments: dict) -> str:

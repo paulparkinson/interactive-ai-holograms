@@ -1,4 +1,12 @@
+# Google ADK and MCP integration
+google-adk>=1.4.2
+google-genai>=1.0.0
+mcp>=0.9.0
+
+# Google Cloud
 google-cloud-aiplatform==1.70.0
 vertexai==1.70.0
+
+# Utilities
 requests==2.32.3
 python-dotenv==1.0.1

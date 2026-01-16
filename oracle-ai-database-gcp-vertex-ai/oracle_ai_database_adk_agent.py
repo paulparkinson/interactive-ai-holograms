@@ -1,34 +1,48 @@
 """
-Oracle AI Database ADK Agent
-Google Agent Development Kit (ADK) agent that uses Oracle RAG API as a tool
+Oracle AI Database ADK Agent with MCP Integration
+Google Agent Development Kit (ADK) agent that uses:
+- Oracle RAG API for vector search
+- Oracle MCP Server for direct database queries
 """
 import os
+import asyncio
 import requests
 from dotenv import load_dotenv
-from google.cloud import aiplatform
-from vertexai.preview import reasoning_engines
+from google.adk.agents import LlmAgent
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
+from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParameters
+from google.genai import types
 
 # Load environment variables
 load_dotenv()
 
 class OracleRAGAgent:
-    """Agent that uses Oracle Database RAG API for answering questions"""
+    """Agent that uses Oracle Database RAG API and MCP Server for answering questions"""
     
-    def __init__(self, api_url: str, project_id: str, location: str):
+    def __init__(self, api_url: str, project_id: str, location: str, 
+                 sqlcl_path: str = "/opt/sqlcl/bin/sql",
+                 wallet_path: str = None):
         """
-        Initialize the Oracle RAG Agent
+        Initialize the Oracle RAG Agent with MCP integration
         
         Args:
             api_url: Base URL of the Oracle RAG API
             project_id: GCP project ID
             location: GCP region
+            sqlcl_path: Path to SQLcl executable for MCP server
+            wallet_path: Path to Oracle wallet directory
         """
         self.api_url = api_url.rstrip('/')
         self.project_id = project_id
         self.location = location
+        self.sqlcl_path = sqlcl_path
+        self.wallet_path = wallet_path or os.path.expanduser("~/wallet")
         
-        # Initialize Vertex AI
-        aiplatform.init(project=project_id, location=location)
+        # Session and artifact services for ADK
+        self.session_service = InMemorySessionService()
+        self.artifacts_service = InMemoryArtifactService()
         
     def query_oracle_rag(self, query: str, top_k: int = 5) -> dict:
         """
@@ -45,7 +59,7 @@ class OracleRAGAgent:
             response = requests.post(
                 f"{self.api_url}/query",
                 json={"query": query, "top_k": top_k},
-                timeout=120  # Increased timeout for LLM processing
+                timeout=30  # Timeout for API calls
             )
             response.raise_for_status()
             return response.json()
@@ -69,100 +83,80 @@ class OracleRAGAgent:
         """Get the status of the Oracle RAG API"""
         try:
             response = requests.get(f"{self.api_url}/status", timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.ConnectionError as e:
-            return {"error": f"Cannot connect to {self.api_url}", "status": "unavailable"}
-        except requests.exceptions.RequestException as e:
-            return {"error": str(e), "status": "unavailable"}
-    
-    def create_agent(self):
+    async def create_agent_async(self):
         """
-        Create a reasoning engine agent with Oracle RAG tool
+        Create an ADK agent with Oracle RAG API and MCP database tools
         
         Returns:
-            Reasoning engine instance
+            LlmAgent instance configured with both RAG and MCP tools
         """
-        # Define the agent's tools
-        tools = [
-            {
-                "function_declarations": [
-                    {
-                        "name": "query_oracle_database",
-                        "description": "Search the Oracle Database knowledge base to find information about Oracle Database features, spatial capabilities, vector search, and other database topics. Use this tool when users ask questions about database functionality, features, or documentation.",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "query": {
-                                    "type": "string",
-                                    "description": "The question or search query about Oracle Database"
-                                },
-                                "top_k": {
-                                    "type": "integer",
-                                    "description": "Number of relevant document chunks to retrieve (1-20)",
-                                    "default": 5
-                                }
-                            },
-                            "required": ["query"]
-                        }
-                    },
-                    {
-                        "name": "check_knowledge_base_status",
-                        "description": "Check the status and availability of the Oracle Database knowledge base, including document count and system health.",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {}
-                        }
-                    }
-                ]
-            }
-        ]
+        # Configure Oracle MCP server parameters
+        oracle_mcp_params = StdioServerParameters(
+            command=self.sqlcl_path,
+            args=["-mcp"],
+            env={"TNS_ADMIN": self.wallet_path}
+        )
         
         # Define agent instructions
         instructions = """You are a helpful assistant specializing in Oracle Database.
-        
-You have access to a knowledge base containing Oracle Database documentation and information.
 
-When users ask questions about Oracle Database:
-1. Use the query_oracle_database tool to search the knowledge base
-2. Provide clear, accurate answers based on the retrieved information
-3. If the knowledge base doesn't have relevant information, say so clearly
-4. You can also use your general knowledge, but prefer the knowledge base for specific technical questions
+You have access to two complementary tools:
 
-When users ask about the system status:
-- Use check_knowledge_base_status to get information about the knowledge base
+1. **Oracle RAG Knowledge Base (query_oracle_rag_kb)**: Use this to search documentation and find 
+   information about Oracle Database features, capabilities, spatial functions, vector search, 
+   and other conceptual/documentation topics.
 
-Be concise, helpful, and technically accurate."""
+2. **Oracle MCP Database Server**: Use these tools for direct database operations like:
+   - Running SQL queries (list-connections, connect, run-sql, run-sqlcl)
+   - Checking database schema (schema-information)
+   - Viewing connection status and database metadata
+   - Executing database commands
+
+**When to use each tool:**
+- For "what is" or "how to" questions → use query_oracle_rag_kb
+- For "show me data", "list tables", "query database" → use MCP database tools
+- The MCP server connection is: paulparkdb_mcp
+- Always connect to paulparkdb_mcp before running database queries
+
+Be concise, helpful, and technically accurate. Combine information from both sources when appropriate."""
         
-        # Tool function implementations
-        def query_oracle_database(query: str, top_k: int = 5) -> str:
-            """Query the Oracle RAG knowledge base"""
-            result = self.query_oracle_rag(query, top_k)
-            if "error" in result:
-                return result["answer"]
-            return f"{result['answer']}\n\n[Retrieved from {len(result.get('context_chunks', []))} document chunks in {result.get('total_time', 0)}s]"
-        
-        def check_knowledge_base_status() -> str:
-            """Check knowledge base status"""
-            status = self.get_api_status()
-            if "error" in status:
-                return f"Knowledge base status: unavailable - {status['error']}"
-            return f"Knowledge base status: {status['status']}\nDocuments: {status['document_count']}\nDatabase connected: {status['database_connected']}"
-        
-        # Create reasoning engine
-        agent = reasoning_engines.LangchainAgent(
+        # Create ADK agent with MCP toolset
+        agent = LlmAgent(
             model="gemini-2.0-flash-exp",
-            tools=tools,
-            agent_executor_kwargs={"return_intermediate_steps": True},
-            model_kwargs={
-                "temperature": 0.7,
-                "max_output_tokens": 2048
-            }
+            name="oracle_ai_assistant",
+            instruction=instructions,
+            tools=[
+                MCPToolset(connection_params=oracle_mcp_params),
+                self._create_rag_tool()
+            ]
         )
         
-        # Set up tool routing
-        agent.set_up(
-            {
+        return agent
+    
+    def _create_rag_tool(self):
+        """Create custom RAG tool as a Python function for ADK"""
+        def query_oracle_rag_kb(query: str, top_k: int = 5) -> str:
+            """
+            Search the Oracle Database knowledge base for documentation and feature information.
+            
+            Args:
+                query: The question or search query about Oracle Database
+                top_k: Number of relevant document chunks to retrieve (1-20)
+            
+            Returns:
+                Answer with context from documentation
+            """
+            result = self.query_oracle_rag(query, top_k)
+            if "error" in result:
+                return f"Error accessing knowledge base: {result['answer']}"
+            
+            answer = result['answer']
+            chunks = len(result.get('context_chunks', []))
+            time_taken = result.get('total_time', 0)
+            
+            return f"{answer}\n\n[Source: Retrieved from {chunks} documentation chunks in {time_taken:.2f}s]"
+        
+        return query_oracle_rag_kb
                 "query_oracle_database": query_oracle_database,
                 "check_knowledge_base_status": check_knowledge_base_status
             },
@@ -191,10 +185,110 @@ Be concise, helpful, and technically accurate."""
         
         print()
         print("Type your questions about Oracle Database (or 'quit' to exit)")
-        print("-" * 70)
+    async def run_cli_async(self):
+        """Run interactive CLI interface with ADK agent"""
+        print("=" * 80)
+        print("Oracle Database AI Agent with MCP (powered by Google ADK)")
+        print("=" * 80)
+        print(f"RAG API URL: {self.api_url}")
+        print(f"SQLcl Path: {self.sqlcl_path}")
+        print(f"Wallet Path: {self.wallet_path}")
+        print(f"Project: {self.project_id}")
+        print(f"Region: {self.location}")
         print()
         
-        # Simple direct query mode (without full ADK agent for now)
+        # Check API status
+        status = self.get_api_status()
+        if "error" not in status:
+            print(f"✓ Knowledge base: {status['document_count']} documents")
+            print(f"✓ RAG API Status: {status['status']}")
+        else:
+            print(f"⚠️  Warning: {status.get('error', 'RAG API unavailable')}")
+        
+        print()
+        print("🔧 Initializing ADK agent with MCP tools...")
+        
+        try:
+            agent = await self.create_agent_async()
+            print("✓ Agent initialized successfully!")
+            print()
+            print("Available capabilities:")
+            print("  - Search Oracle documentation (RAG)")
+            print("  - Query database directly (MCP: paulparkdb_mcp)")
+            print("  - List connections, run SQL, check schema")
+            print()
+            print("Type your questions about Oracle Database (or 'quit' to exit)")
+            print("-" * 80)
+            print()
+            
+            # Create session
+            session = self.session_service.create_session(
+                state={},
+                app_name="oracle_ai_agent",
+                user_id="cli_user"
+            )
+            
+            # Create runner
+            runner = Runner(
+                agent=agent,
+                session_service=self.session_service,
+                artifact_service=self.artifacts_service
+            )
+            
+            # Interactive loop
+            while True:
+                try:
+                    user_input = input("You: ").strip()
+                    
+                    if not user_input:
+                        continue
+                        
+                    if user_input.lower() in ['quit', 'exit', 'q']:
+                        print("\nGoodbye!")
+                        break
+                    
+                    # Create message content
+                    content = types.Content(
+async def main():
+    """Main entry point"""
+    # Configuration
+    api_url = os.getenv("ORACLE_RAG_API_URL", "http://localhost:8501")
+    project_id = os.getenv("GCP_PROJECT_ID", "adb-pm-prod")
+    location = os.getenv("GCP_REGION", "us-central1")
+    sqlcl_path = os.getenv("SQLCL_PATH", "/opt/sqlcl/bin/sql")
+    wallet_path = os.getenv("TNS_ADMIN", os.path.expanduser("~/wallet"))
+    
+    # Create and run agent
+    agent = OracleRAGAgent(
+        api_url=api_url,
+        project_id=project_id,
+        location=location,
+        sqlcl_path=sqlcl_path,
+        wallet_path=wallet_path
+    )
+    await agent.run_cli_async()
+
+if __name__ == "__main__":
+    asyncio.run(main()           
+                    print("\n")
+                    
+                except KeyboardInterrupt:
+                    print("\n\nGoodbye!")
+                    break
+                except Exception as e:
+                    print(f"\n❌ Error: {str(e)}\n")
+                    
+        except Exception as e:
+            print(f"❌ Failed to initialize agent: {str(e)}")
+            print("\nFalling back to simple RAG-only mode...")
+            await self.run_simple_cli()
+    
+    async def run_simple_cli(self):
+        """Fallback simple CLI without MCP"""
+        print("\nType your questions about Oracle Database (or 'quit' to exit)")
+        print("-" * 80)
+        print()
+        
         while True:
             try:
                 user_input = input("You: ").strip()
@@ -206,17 +300,6 @@ Be concise, helpful, and technically accurate."""
                     print("\nGoodbye!")
                     break
                 
-                if user_input.lower() in ['status', 'health']:
-                    status = self.get_api_status()
-                    if "error" in status:
-                        print(f"\n❌ Error: {status['error']}\n")
-                    else:
-                        print(f"\n✓ Status: {status['status']}")
-                        print(f"✓ Documents: {status['document_count']}")
-                        print(f"✓ Database: {'Connected' if status['database_connected'] else 'Disconnected'}")
-                        print(f"✓ Models: {'Loaded' if status['models_loaded'] else 'Not loaded'}\n")
-                    continue
-                
                 # Query the RAG API
                 print("\n🔍 Searching knowledge base...")
                 result = self.query_oracle_rag(user_input)
@@ -225,26 +308,4 @@ Be concise, helpful, and technically accurate."""
                     print(f"\n❌ Error: {result['error']}\n")
                 else:
                     print(f"\n💡 Answer:\n{result['answer']}")
-                    print(f"\n📊 Retrieved {len(result.get('context_chunks', []))} chunks in {result.get('total_time', 0):.2f}s")
-                    print(f"   - Vector search: {result.get('vector_search_time', 0):.2f}s")
-                    print(f"   - LLM response: {result.get('llm_response_time', 0):.2f}s\n")
-                
-            except KeyboardInterrupt:
-                print("\n\nGoodbye!")
-                break
-            except Exception as e:
-                print(f"\n❌ Error: {str(e)}\n")
-
-def main():
-    """Main entry point"""
-    # Configuration
-    api_url = os.getenv("ORACLE_RAG_API_URL", "http://34.48.146.146:8501")
-    project_id = os.getenv("GCP_PROJECT_ID", "adb-pm-prod")
-    location = os.getenv("GCP_REGION", "us-central1")
-    
-    # Create and run agent
-    agent = OracleRAGAgent(api_url, project_id, location)
-    agent.run_cli()
-
-if __name__ == "__main__":
-    main()
+                    print(f"\n📊 Retrieved {len(result.get('context_chunks', []))} chunks in {result.get('total

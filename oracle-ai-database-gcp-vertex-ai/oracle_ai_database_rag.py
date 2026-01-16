@@ -17,7 +17,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_community.vectorstores.oraclevs import OracleVS
 from langchain_community.vectorstores.utils import DistanceStrategy
 from langchain_core.documents import Document
-from langchain_google_genai import GoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_google_vertexai import VertexAI, VertexAIEmbeddings
 import oracledb
 import os
 import vertexai
@@ -62,10 +62,10 @@ async def lifespan(app: FastAPI):
     vertexai.init(project=project_id, location=region)
     
     # Initialize embeddings model
-    embeddings = GoogleGenerativeAIEmbeddings(model="text-embedding-004")
+    embeddings = VertexAIEmbeddings(model_name="text-embedding-004")
     
     # Initialize LLM
-    llm = GoogleGenerativeAI(
+    llm = VertexAI(
         model_name="gemini-2.0-flash-exp",
         max_output_tokens=8192,
         temperature=0.7,

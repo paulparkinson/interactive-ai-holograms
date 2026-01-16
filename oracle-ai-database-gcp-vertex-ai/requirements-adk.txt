@@ -3,9 +3,8 @@ google-adk>=1.4.2
 google-genai>=1.0.0
 mcp>=0.9.0
 
-# Google Cloud (upgraded for ADK compatibility)
+# Google Cloud (vertexai is included in google-cloud-aiplatform)
 google-cloud-aiplatform>=1.132.0
-vertexai>=1.70.0
 
 # Utilities
 requests>=2.32.4

@@ -8,6 +8,7 @@ import os
 import asyncio
 import requests
 from dotenv import load_dotenv
+import vertexai
 from google.adk.agents import LlmAgent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
@@ -98,6 +99,9 @@ class OracleRAGAgent:
         Returns:
             LlmAgent instance configured with both RAG and MCP tools
         """
+        # Initialize Vertex AI
+        vertexai.init(project=self.project_id, location=self.location)
+        
         # Configure Oracle MCP server parameters
         oracle_mcp_params = StdioConnectionParams(
             server_params=StdioServerParameters(
@@ -137,9 +141,6 @@ Be concise, helpful, and technically accurate. Combine information from both sou
             model="gemini-2.0-flash-exp",
             name="oracle_ai_assistant",
             instruction=instructions,
-            vertexai=True,
-            project=self.project_id,
-            location=self.location,
             tools=[
                 self._create_rag_tool()
                 # McpToolset(connection_params=oracle_mcp_params),  # Disabled temporarily

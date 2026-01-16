@@ -236,6 +236,13 @@ Be concise, helpful, and technically accurate. Combine information from both sou
                 user_id="cli_user"
             )
             
+            # Use 'id' or 'session_id' depending on ADK version
+            session_id = getattr(session, "session_id", getattr(session, "id", None))
+            if not session_id:
+                # Fallback for debug
+                print(f"Warning: Could not determine session ID from session object: {dir(session)}")
+                session_id = str(session) # Last resort
+            
             # Create runner
             runner = Runner(
                 agent=agent,
@@ -258,7 +265,7 @@ Be concise, helpful, and technically accurate. Combine information from both sou
                     
                     # Process query
                     response = await runner.run_async(
-                        session_id=session.session_id,
+                        session_id=session_id,
                         new_message=user_input
                     )
                     

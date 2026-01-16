@@ -137,6 +137,9 @@ Be concise, helpful, and technically accurate. Combine information from both sou
             model="gemini-2.0-flash-exp",
             name="oracle_ai_assistant",
             instruction=instructions,
+            vertexai=True,
+            project=self.project_id,
+            location=self.location,
             tools=[
                 self._create_rag_tool()
                 # McpToolset(connection_params=oracle_mcp_params),  # Disabled temporarily

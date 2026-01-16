@@ -131,13 +131,15 @@ You have access to two complementary tools:
 Be concise, helpful, and technically accurate. Combine information from both sources when appropriate."""
         
         # Create ADK agent with MCP toolset
+        # Note: Temporarily disabling MCP tools due to schema conversion issue
+        # TODO: Re-enable once ADK MCP integration is fixed
         agent = LlmAgent(
             model="gemini-2.0-flash-exp",
             name="oracle_ai_assistant",
             instruction=instructions,
             tools=[
-                McpToolset(connection_params=oracle_mcp_params),
                 self._create_rag_tool()
+                # McpToolset(connection_params=oracle_mcp_params),  # Disabled temporarily
             ]
         )
         
@@ -217,8 +219,9 @@ Be concise, helpful, and technically accurate. Combine information from both sou
             print()
             print("Available capabilities:")
             print("  - Search Oracle documentation (RAG)")
-            print("  - Query database directly (MCP: paulparkdb_mcp)")
-            print("  - List connections, run SQL, check schema")
+            print("  - Note: MCP database tools temporarily disabled due to schema compatibility")
+            # print("  - Query database directly (MCP: paulparkdb_mcp)")
+            # print("  - List connections, run SQL, check schema")
             print()
             print("Type your questions about Oracle Database (or 'quit' to exit)")
             print("-" * 80)

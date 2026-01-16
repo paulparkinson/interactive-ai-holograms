@@ -12,7 +12,7 @@ from google.adk.agents import LlmAgent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
-from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParameters
+from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioConnectionParams
 from google.genai import types
 
 # Load environment variables
@@ -34,6 +34,11 @@ class OracleRAGAgent:
             sqlcl_path: Path to SQLcl executable for MCP server
             wallet_path: Path to Oracle wallet directory
         """
+        # If running on the same machine as the API, prefer localhost to avoid network issues
+        if "34.48.146.146" in api_url:
+            print(f"⚠️  Note: Replacing public IP in API URL with localhost for local connection reliability.")
+            api_url = api_url.replace("34.48.146.146", "localhost")
+            
         self.api_url = api_url.rstrip('/')
         self.project_id = project_id
         self.location = location
@@ -99,7 +104,7 @@ class OracleRAGAgent:
             LlmAgent instance configured with both RAG and MCP tools
         """
         # Configure Oracle MCP server parameters
-        oracle_mcp_params = StdioServerParameters(
+        oracle_mcp_params = StdioConnectionParams(
             command=self.sqlcl_path,
             args=["-mcp"],
             env={"TNS_ADMIN": self.wallet_path}
@@ -134,7 +139,7 @@ Be concise, helpful, and technically accurate. Combine information from both sou
             name="oracle_ai_assistant",
             instruction=instructions,
             tools=[
-                MCPToolset(connection_params=oracle_mcp_params),
+                McpToolset(connection_params=oracle_mcp_params),
                 self._create_rag_tool()
             ]
         )
@@ -223,7 +228,7 @@ Be concise, helpful, and technically accurate. Combine information from both sou
             print()
             
             # Create session
-            session = self.session_service.create_session(
+            session = await self.session_service.create_session(
                 state={},
                 app_name="oracle_ai_agent",
                 user_id="cli_user"
@@ -232,6 +237,7 @@ Be concise, helpful, and technically accurate. Combine information from both sou
             # Create runner
             runner = Runner(
                 agent=agent,
+                app_name="oracle_ai_agent",
                 session_service=self.session_service,
                 artifact_service=self.artifacts_service
             )

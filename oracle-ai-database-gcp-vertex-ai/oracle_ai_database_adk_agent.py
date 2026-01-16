@@ -12,7 +12,7 @@ from google.adk.agents import LlmAgent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
-from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioConnectionParams
+from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioConnectionParams, StdioServerParameters
 from google.genai import types
 
 # Load environment variables
@@ -105,9 +105,11 @@ class OracleRAGAgent:
         """
         # Configure Oracle MCP server parameters
         oracle_mcp_params = StdioConnectionParams(
-            command=self.sqlcl_path,
-            args=["-mcp"],
-            env={"TNS_ADMIN": self.wallet_path}
+            server_params=StdioServerParameters(
+                command=self.sqlcl_path,
+                args=["-mcp"],
+                env={"TNS_ADMIN": self.wallet_path}
+            )
         )
         
         # Define agent instructions

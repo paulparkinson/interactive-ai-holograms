@@ -34,11 +34,6 @@ class OracleRAGAgent:
             sqlcl_path: Path to SQLcl executable for MCP server
             wallet_path: Path to Oracle wallet directory
         """
-        # If running on the same machine as the API, prefer localhost to avoid network issues
-        if "34.48.146.146" in api_url:
-            print(f"⚠️  Note: Replacing public IP in API URL with localhost for local connection reliability.")
-            api_url = api_url.replace("34.48.146.146", "localhost")
-            
         self.api_url = api_url.rstrip('/')
         self.project_id = project_id
         self.location = location
@@ -281,6 +276,8 @@ Be concise, helpful, and technically accurate. Combine information from both sou
                     break
                 except Exception as e:
                     print(f"\nError: {str(e)}\n")
+                    import traceback
+                    traceback.print_exc()
                     continue
                     
         except Exception as e:

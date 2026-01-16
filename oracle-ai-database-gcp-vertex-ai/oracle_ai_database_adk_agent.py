@@ -288,43 +288,4 @@ async def main():
     await agent.run_cli_async()
 
 if __name__ == "__main__":
-    asyncio.run(main()           
-                    print("\n")
-                    
-                except KeyboardInterrupt:
-                    print("\n\nGoodbye!")
-                    break
-                except Exception as e:
-                    print(f"\n❌ Error: {str(e)}\n")
-                    
-        except Exception as e:
-            print(f"❌ Failed to initialize agent: {str(e)}")
-            print("\nFalling back to simple RAG-only mode...")
-            await self.run_simple_cli()
-    
-    async def run_simple_cli(self):
-        """Fallback simple CLI without MCP"""
-        print("\nType your questions about Oracle Database (or 'quit' to exit)")
-        print("-" * 80)
-        print()
-        
-        while True:
-            try:
-                user_input = input("You: ").strip()
-                
-                if not user_input:
-                    continue
-                    
-                if user_input.lower() in ['quit', 'exit', 'q']:
-                    print("\nGoodbye!")
-                    break
-                
-                # Query the RAG API
-                print("\n🔍 Searching knowledge base...")
-                result = self.query_oracle_rag(user_input)
-                
-                if "error" in result:
-                    print(f"\n❌ Error: {result['error']}\n")
-                else:
-                    print(f"\n💡 Answer:\n{result['answer']}")
-                    print(f"\n📊 Retrieved {len(result.get('context_chunks', []))} chunks in {result.get('total
+    asyncio.run(main())

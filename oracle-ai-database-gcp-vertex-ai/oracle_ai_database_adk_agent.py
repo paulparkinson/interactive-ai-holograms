@@ -165,13 +165,6 @@ Be concise, helpful, and technically accurate. Combine information from both sou
             return f"{answer}\n\n[Source: Retrieved from {chunks} documentation chunks in {time_taken:.2f}s]"
         
         return query_oracle_rag_kb
-                "query_oracle_database": query_oracle_database,
-                "check_knowledge_base_status": check_knowledge_base_status
-            },
-            instructions=instructions
-        )
-        
-        return agent
     
     def run_cli(self):
         """Run interactive CLI interface"""

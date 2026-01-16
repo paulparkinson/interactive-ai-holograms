@@ -265,9 +265,10 @@ Be concise, helpful, and technically accurate. Combine information from both sou
                     
                     # Process query
                     final_response = None
+                    new_message = types.Content(role="user", parts=[types.Part(text=user_input)])
                     async for response in runner.run_async(
                         session_id=session_id,
-                        new_message=user_input,
+                        new_message=new_message,
                         user_id="cli_user"
                     ):
                         final_response = response

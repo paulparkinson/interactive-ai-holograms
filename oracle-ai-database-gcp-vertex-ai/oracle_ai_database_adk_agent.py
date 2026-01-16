@@ -137,8 +137,18 @@ Be concise, helpful, and technically accurate. Combine information from both sou
         # Create ADK agent with MCP toolset
         # Note: Temporarily disabling MCP tools due to schema conversion issue
         # TODO: Re-enable once ADK MCP integration is fixed
+        from google.adk.models import GoogleLLM
+        
+        # Create LLM with explicit Vertex AI configuration
+        google_llm = GoogleLLM(
+            model_name="gemini-2.0-flash-exp",
+            vertexai=True,
+            project=self.project_id,
+            location=self.location
+        )
+        
         agent = LlmAgent(
-            model="gemini-2.0-flash-exp",
+            model=google_llm,
             name="oracle_ai_assistant",
             instruction=instructions,
             tools=[

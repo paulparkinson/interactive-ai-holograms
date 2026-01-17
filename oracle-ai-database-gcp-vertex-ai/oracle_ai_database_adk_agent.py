@@ -3,6 +3,10 @@ Oracle AI Database ADK Agent with MCP Integration
 Google Agent Development Kit (ADK) agent that uses:
 - Oracle RAG API for vector search via FunctionDeclaration
 - Oracle MCP Server for direct database queries via McpToolset
+
+Note: Uses oracle_mcp_wrapper to work around ADK v1.22.1 schema converter bug
+Bug: AttributeError: 'list' object has no attribute 'items'
+Location: google/adk/tools/_gemini_schema_util.py line 160
 """
 import os
 import asyncio
@@ -16,8 +20,16 @@ from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioServerParamet
 from google.adk.tools.mcp_tool import StdioConnectionParams
 from google.genai import types
 
+# Import schema wrapper to fix ADK MCP bug
+from oracle_mcp_wrapper import patch_mcp_toolset
+
 # Load environment variables
 load_dotenv()
+
+# Patch McpToolset to handle complex Oracle schemas
+print("  → Applying MCP schema wrapper patch for ADK v1.22.1...")
+patch_mcp_toolset()
+print("  ✓ MCP schema wrapper applied")
 
 class OracleRAGMCPAgent:
     """Agent that uses Oracle Database RAG API and MCP Server for answering questions"""

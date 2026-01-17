@@ -1,0 +1,603 @@
+"""
+Oracle AI Database Agent with GenerativeModel + Manual MCP Integration
+Combines:
+- GenerativeModel approach from oracle_ai_database_adk_fullagent.py (for RAG)
+- Manual MCP subprocess integration for Oracle SQLcl tools
+
+This approach bypasses ADK's buggy McpToolset to use MCP directly.
+"""
+import os
+import json
+import asyncio
+import requests
+import subprocess
+from dotenv import load_dotenv
+from google.cloud import aiplatform
+import vertexai
+from vertexai.generative_models import GenerativeModel, Tool, FunctionDeclaration, Part
+from typing import Dict, Any, Optional
+
+# Load environment variables
+load_dotenv()
+
+class MCPClient:
+    """Manual MCP client using JSON-RPC over stdio"""
+    
+    def __init__(self, sqlcl_path: str, wallet_path: str):
+        self.sqlcl_path = sqlcl_path
+        self.wallet_path = wallet_path
+        self.process = None
+        self.message_id = 0
+        self.initialized = False
+        
+    async def start(self):
+        """Start the MCP server process"""
+        try:
+            print(f"  → Starting SQLcl MCP server: {self.sqlcl_path}")
+            
+            # Set up environment
+            env = os.environ.copy()
+            env['TNS_ADMIN'] = self.wallet_path
+            
+            # Start SQLcl in MCP mode
+            self.process = await asyncio.create_subprocess_exec(
+                self.sqlcl_path,
+                "-mcp",
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env
+            )
+            
+            # Initialize MCP session
+            await self._initialize()
+            
+            print("  ✓ MCP server started and initialized")
+            
+        except Exception as e:
+            raise RuntimeError(f"Failed to start MCP server: {e}")
+    
+    async def _initialize(self):
+        """Initialize MCP protocol"""
+        try:
+            # Send initialize request
+            init_request = {
+                "jsonrpc": "2.0",
+                "id": self._next_id(),
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {
+                        "name": "oracle-genai-mcp-client",
+                        "version": "1.0.0"
+                    }
+                }
+            }
+            
+            response = await self._send_request(init_request)
+            
+            if "error" in response:
+                raise RuntimeError(f"Initialize failed: {response['error']}")
+            
+            # Send initialized notification
+            initialized_notification = {
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized"
+            }
+            
+            await self._send_notification(initialized_notification)
+            
+            self.initialized = True
+            
+        except Exception as e:
+            raise RuntimeError(f"MCP initialization failed: {e}")
+    
+    def _next_id(self) -> int:
+        """Get next message ID"""
+        self.message_id += 1
+        return self.message_id
+    
+    async def _send_request(self, request: dict, timeout: float = 30.0) -> dict:
+        """Send JSON-RPC request and wait for response"""
+        if not self.process or not self.process.stdin:
+            raise RuntimeError("MCP server not started")
+        
+        try:
+            # Send request
+            request_line = json.dumps(request) + "\n"
+            self.process.stdin.write(request_line.encode())
+            await self.process.stdin.drain()
+            
+            # Read response with timeout
+            response_line = await asyncio.wait_for(
+                self.process.stdout.readline(),
+                timeout=timeout
+            )
+            
+            if not response_line:
+                raise RuntimeError("MCP server closed connection")
+            
+            response = json.loads(response_line.decode())
+            return response
+            
+        except asyncio.TimeoutError:
+            raise RuntimeError(f"MCP request timed out after {timeout}s")
+        except Exception as e:
+            raise RuntimeError(f"MCP request failed: {e}")
+    
+    async def _send_notification(self, notification: dict):
+        """Send JSON-RPC notification (no response expected)"""
+        if not self.process or not self.process.stdin:
+            raise RuntimeError("MCP server not started")
+        
+        notification_line = json.dumps(notification) + "\n"
+        self.process.stdin.write(notification_line.encode())
+        await self.process.stdin.drain()
+    
+    async def list_tools(self) -> list:
+        """List available MCP tools"""
+        request = {
+            "jsonrpc": "2.0",
+            "id": self._next_id(),
+            "method": "tools/list"
+        }
+        
+        response = await self._send_request(request)
+        
+        if "error" in response:
+            raise RuntimeError(f"Failed to list tools: {response['error']}")
+        
+        return response.get("result", {}).get("tools", [])
+    
+    async def call_tool(self, tool_name: str, arguments: dict) -> Any:
+        """Call an MCP tool"""
+        request = {
+            "jsonrpc": "2.0",
+            "id": self._next_id(),
+            "method": "tools/call",
+            "params": {
+                "name": tool_name,
+                "arguments": arguments
+            }
+        }
+        
+        response = await self._send_request(request, timeout=60.0)
+        
+        if "error" in response:
+            raise RuntimeError(f"Tool call failed: {response['error']}")
+        
+        result = response.get("result", {})
+        
+        # Extract content from MCP response
+        if "content" in result:
+            content_items = result["content"]
+            if isinstance(content_items, list) and len(content_items) > 0:
+                return content_items[0].get("text", "")
+        
+        return str(result)
+    
+    async def stop(self):
+        """Stop the MCP server"""
+        if self.process:
+            self.process.terminate()
+            await self.process.wait()
+            self.process = None
+            self.initialized = False
+
+
+class OracleGenAIMCPAgent:
+    """Agent using GenerativeModel with RAG + manual MCP integration"""
+    
+    def __init__(self, api_url: str, project_id: str, location: str,
+                 sqlcl_path: str = "/opt/sqlcl/bin/sql",
+                 wallet_path: str = None):
+        """
+        Initialize the agent
+        
+        Args:
+            api_url: Base URL of the Oracle RAG API
+            project_id: GCP project ID
+            location: GCP region
+            sqlcl_path: Path to SQLcl executable
+            wallet_path: Path to Oracle wallet directory
+        """
+        self.api_url = api_url.rstrip('/')
+        self.project_id = project_id
+        self.location = location
+        self.sqlcl_path = sqlcl_path
+        self.wallet_path = wallet_path or os.path.expanduser("~/wallet")
+        self.mcp_client = None
+        self.agent = None
+        self.conversation_history = []
+        
+        # Initialize Vertex AI
+        vertexai.init(project=project_id, location=location)
+        
+    async def initialize(self):
+        """Initialize the agent and MCP client"""
+        print("🤖 Initializing GenAI + MCP Agent...\n")
+        
+        # Start MCP client
+        self.mcp_client = MCPClient(self.sqlcl_path, self.wallet_path)
+        await self.mcp_client.start()
+        
+        # Create agent with function declarations
+        self.agent = await self.create_agent()
+        
+        print("✓ Agent ready!\n")
+    
+    def query_oracle_rag(self, query: str, top_k: int = 5) -> dict:
+        """Query the Oracle RAG knowledge base"""
+        try:
+            response = requests.post(
+                f"{self.api_url}/query",
+                json={"query": query, "top_k": top_k},
+                timeout=120
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            return {
+                "error": str(e),
+                "answer": f"Error querying knowledge base: {str(e)}"
+            }
+    
+    def get_api_status(self) -> dict:
+        """Get the status of the Oracle RAG API"""
+        try:
+            response = requests.get(f"{self.api_url}/status", timeout=30)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            return {"error": str(e), "status": "unavailable"}
+    
+    async def create_agent(self):
+        """Create Gemini agent with RAG and MCP function declarations"""
+        
+        # RAG functions (same as fullagent)
+        query_oracle_function = FunctionDeclaration(
+            name="query_oracle_database",
+            description="Search the Oracle Database knowledge base for information about Oracle Database features, spatial capabilities, vector search, JSON features, SQL enhancements, and other database topics.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The detailed question or search query about Oracle Database"
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Number of relevant document chunks to retrieve (1-20)",
+                        "default": 5
+                    }
+                },
+                "required": ["query"]
+            }
+        )
+        
+        status_function = FunctionDeclaration(
+            name="check_knowledge_base_status",
+            description="Check the status and availability of the Oracle Database knowledge base system",
+            parameters={
+                "type": "object",
+                "properties": {}
+            }
+        )
+        
+        # MCP functions - list available connections
+        list_connections_function = FunctionDeclaration(
+            name="mcp_list_connections",
+            description="List all available Oracle database connections. Use this to see what database connections are configured and available.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "filter": {
+                        "type": "string",
+                        "description": "Optional filter to refine the list of connections",
+                        "default": ""
+                    }
+                }
+            }
+        )
+        
+        # MCP function - connect to database
+        connect_function = FunctionDeclaration(
+            name="mcp_connect",
+            description="Connect to an Oracle database using a saved connection name. The connection name is case sensitive. Use mcp_list_connections first to see available connections.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "connection_name": {
+                        "type": "string",
+                        "description": "The name of the saved connection to connect to"
+                    }
+                },
+                "required": ["connection_name"]
+            }
+        )
+        
+        # MCP function - run SQL query
+        run_sql_function = FunctionDeclaration(
+            name="mcp_run_sql",
+            description="Execute a SQL query on the connected Oracle database. Returns results in CSV format. Requires an active database connection (use mcp_connect first).",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "sql": {
+                        "type": "string",
+                        "description": "The SQL query to execute"
+                    }
+                },
+                "required": ["sql"]
+            }
+        )
+        
+        # MCP function - get schema information
+        schema_info_function = FunctionDeclaration(
+            name="mcp_schema_information",
+            description="Get detailed information about the currently connected database schema, including tables, columns, indexes, and relationships. Requires an active database connection.",
+            parameters={
+                "type": "object",
+                "properties": {}
+            }
+        )
+        
+        # MCP function - disconnect
+        disconnect_function = FunctionDeclaration(
+            name="mcp_disconnect",
+            description="Disconnect from the current Oracle database session.",
+            parameters={
+                "type": "object",
+                "properties": {}
+            }
+        )
+        
+        # Create tool with all function declarations
+        oracle_tool = Tool(
+            function_declarations=[
+                query_oracle_function,
+                status_function,
+                list_connections_function,
+                connect_function,
+                run_sql_function,
+                schema_info_function,
+                disconnect_function
+            ]
+        )
+        
+        # System instructions
+        instructions = """You are an expert Oracle Database AI assistant with two types of capabilities:
+
+**Documentation Knowledge Base:**
+- Access to comprehensive Oracle Database documentation
+- Use query_oracle_database for questions about features, syntax, best practices
+
+**Direct Database Access (via MCP):**
+- List available database connections with mcp_list_connections
+- Connect to databases with mcp_connect
+- Run SQL queries with mcp_run_sql
+- Get schema information with mcp_schema_information
+- Disconnect with mcp_disconnect
+
+**When to Use Each Tool:**
+- Use documentation tools for: "How do I...?", "What is...?", "Best practices for..."
+- Use database tools for: "Show me the data in...", "What tables exist?", "Run this query..."
+
+**Multi-Step Reasoning:**
+- For database queries, first check if connected (list_connections)
+- If not connected, connect first (mcp_connect)
+- Then run your query or get schema info
+- Always explain what data you're showing
+
+Be helpful, technically accurate, and use the right tool for each task."""
+        
+        # Create Gemini model with tools
+        model = GenerativeModel(
+            "gemini-2.0-flash-exp",
+            tools=[oracle_tool],
+            system_instruction=instructions
+        )
+        
+        return model
+    
+    async def execute_function_call(self, function_name: str, args: dict) -> str:
+        """Execute a function call from the agent"""
+        print(f"  🔧 Tool called: {function_name}({args})")
+        
+        try:
+            # RAG functions
+            if function_name == "query_oracle_database":
+                query = args.get("query", "")
+                top_k = args.get("top_k", 5)
+                result = self.query_oracle_rag(query, top_k)
+                
+                if "error" in result:
+                    return f"Error: {result['answer']}"
+                
+                response = f"{result['answer']}\n\n"
+                response += f"[Source: {len(result.get('context_chunks', []))} document chunks]"
+                return response
+            
+            elif function_name == "check_knowledge_base_status":
+                status = self.get_api_status()
+                if "error" in status:
+                    return f"Knowledge base unavailable: {status['error']}"
+                
+                return (
+                    f"Knowledge Base Status:\n"
+                    f"- Status: {status['status']}\n"
+                    f"- Documents: {status['document_count']} chunks\n"
+                    f"- Database: {'Connected' if status['database_connected'] else 'Disconnected'}"
+                )
+            
+            # MCP functions
+            elif function_name == "mcp_list_connections":
+                filter_str = args.get("filter", "")
+                mcp_args = {}
+                if filter_str:
+                    mcp_args["filter"] = filter_str
+                result = await self.mcp_client.call_tool("list-connections", mcp_args)
+                return f"Available Connections:\n{result}"
+            
+            elif function_name == "mcp_connect":
+                connection_name = args.get("connection_name", "")
+                if not connection_name:
+                    return "Error: connection_name is required"
+                result = await self.mcp_client.call_tool("connect", {"connection_name": connection_name, "model": "gemini-2.0-flash-exp"})
+                return f"Connection Result:\n{result}"
+            
+            elif function_name == "mcp_run_sql":
+                sql = args.get("sql", "")
+                if not sql:
+                    return "Error: sql query is required"
+                result = await self.mcp_client.call_tool("run-sql", {"sql": sql, "model": "gemini-2.0-flash-exp"})
+                return f"Query Results (CSV):\n{result}"
+            
+            elif function_name == "mcp_schema_information":
+                result = await self.mcp_client.call_tool("schema-information", {"model": "gemini-2.0-flash-exp"})
+                return f"Schema Information:\n{result}"
+            
+            elif function_name == "mcp_disconnect":
+                result = await self.mcp_client.call_tool("disconnect", {"model": "gemini-2.0-flash-exp"})
+                return f"Disconnect Result:\n{result}"
+            
+            else:
+                return f"Unknown function: {function_name}"
+                
+        except Exception as e:
+            return f"Error executing {function_name}: {str(e)}"
+    
+    async def query(self, user_input: str) -> Dict[str, Any]:
+        """
+        Query the agent with full reasoning capabilities
+        
+        Args:
+            user_input: User's question or request
+            
+        Returns:
+            Agent response
+        """
+        try:
+            print("🤔 Agent reasoning...\n")
+            
+            # Start chat
+            chat = self.agent.start_chat()
+            
+            # Send message
+            response = chat.send_message(user_input)
+            
+            # Handle function calls
+            max_iterations = 10  # More iterations for multi-step MCP workflows
+            iteration = 0
+            
+            while response.candidates[0].content.parts[0].function_call and iteration < max_iterations:
+                iteration += 1
+                function_call = response.candidates[0].content.parts[0].function_call
+                function_name = function_call.name
+                function_args = dict(function_call.args)
+                
+                # Execute the function (async for MCP calls)
+                function_response = await self.execute_function_call(function_name, function_args)
+                
+                # Send function response back to model
+                response = chat.send_message(
+                    Part.from_function_response(
+                        name=function_name,
+                        response={"result": function_response}
+                    )
+                )
+            
+            # Get final text response
+            final_answer = response.text
+            
+            # Store in conversation history
+            self.conversation_history.append({
+                "user": user_input,
+                "agent": {"output": final_answer}
+            })
+            
+            return {"output": final_answer}
+            
+        except Exception as e:
+            return {"output": f"Error during agent reasoning: {str(e)}"}
+    
+    async def run_cli(self):
+        """Run interactive CLI"""
+        print("=" * 80)
+        print("Oracle Database GenAI + MCP Agent (Documentation + Direct DB Access)")
+        print("=" * 80)
+        print(f"API URL: {self.api_url}")
+        print(f"Project: {self.project_id}")
+        print(f"SQLcl: {self.sqlcl_path}")
+        print()
+        
+        # Check API status
+        status = self.get_api_status()
+        if "error" not in status:
+            print(f"✓ Knowledge base: {status['document_count']} documents")
+        else:
+            print(f"⚠️  Knowledge base: {status.get('error', 'unavailable')}")
+        
+        print()
+        print("Ask questions about Oracle Database or query your databases directly.")
+        print("Commands: 'quit' to exit, 'history' to see conversation")
+        print("-" * 80)
+        print()
+        
+        while True:
+            try:
+                user_input = input("\n🧑 You: ").strip()
+                
+                if not user_input:
+                    continue
+                
+                if user_input.lower() in ['quit', 'exit', 'q']:
+                    print("\nShutting down...")
+                    await self.mcp_client.stop()
+                    print("Goodbye!")
+                    break
+                
+                if user_input.lower() == 'history':
+                    print("\n📜 Conversation History:")
+                    for i, entry in enumerate(self.conversation_history, 1):
+                        print(f"\n[{i}] User: {entry['user'][:80]}")
+                        print(f"    Agent: {entry['agent'].get('output', '')[:80]}...")
+                    continue
+                
+                # Query the agent
+                response = await self.query(user_input)
+                
+                # Display answer
+                print(f"\n🤖 Agent: {response.get('output', 'No response generated')}\n")
+                
+            except KeyboardInterrupt:
+                print("\n\nShutting down...")
+                await self.mcp_client.stop()
+                print("Goodbye!")
+                break
+            except Exception as e:
+                print(f"\n❌ Error: {str(e)}\n")
+
+async def main():
+    """Main entry point"""
+    # Configuration
+    api_url = os.getenv("ORACLE_RAG_API_URL", "http://34.48.146.146:8501")
+    project_id = os.getenv("GCP_PROJECT_ID", "adb-pm-prod")
+    location = os.getenv("GCP_REGION", "us-central1")
+    sqlcl_path = os.getenv("SQLCL_PATH", "/opt/sqlcl/bin/sql")
+    wallet_path = os.getenv("TNS_ADMIN", os.path.expanduser("~/wallet"))
+    
+    print("Starting GenAI + MCP Agent...\n")
+    
+    # Create agent
+    agent = OracleGenAIMCPAgent(api_url, project_id, location, sqlcl_path, wallet_path)
+    
+    # Initialize (starts MCP)
+    await agent.initialize()
+    
+    # Run CLI
+    await agent.run_cli()
+
+if __name__ == "__main__":
+    asyncio.run(main())

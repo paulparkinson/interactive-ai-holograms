@@ -112,15 +112,19 @@ class OracleRAGMCPAgent:
         )
         
         # Create StdioServerParameters for SQLcl MCP server
+        # Set protocol version to match server (2024-11-05) to avoid negotiation issues
         mcp_server_params = StdioServerParameters(
             command=self.sqlcl_path,
             args=["-mcp"],
             env={"TNS_ADMIN": self.wallet_path}
         )
         
-        # Wrap in StdioConnectionParams (recommended pattern)
+        # Wrap in StdioConnectionParams with explicit protocol version
+        # This fixes the protocol version mismatch error:
+        # Client was requesting 2025-11-25, server offers 2024-11-05
         mcp_connection_params = StdioConnectionParams(
-            server_params=mcp_server_params
+            server_params=mcp_server_params,
+            protocol_version="2024-11-05"  # Match Oracle SQLcl MCP server version
         )
         
         # Define agent instruction
@@ -140,12 +144,26 @@ Always be helpful, concise, and technically accurate."""
         
         # Create agent with MCP tools directly via McpToolset
         # Following official ADK MCP pattern
-        self.agent = LlmAgent(
-            model="gemini-2.0-flash-exp",
-            name="oracle_assistant",
-            instruction=instruction,
-            tools=[McpToolset(connection_params=mcp_connection_params)]
-        )
+        # Note: Increased timeouts to handle MCP server initialization
+        try:
+            self.agent = LlmAgent(
+                model="gemini-2.0-flash-exp",
+                name="oracle_assistant",
+                instruction=instruction,
+                tools=[McpToolset(
+                    connection_params=mcp_connection_params,
+                    # Add timeout configuration if supported
+                    timeout=120.0  # 2 minute timeout for MCP operations
+                )]
+            )
+        except TypeError:
+            # If timeout parameter not supported, fallback to default
+            self.agent = LlmAgent(
+                model="gemini-2.0-flash-exp",
+                name="oracle_assistant",
+                instruction=instruction,
+                tools=[McpToolset(connection_params=mcp_connection_params)]
+            )
         
         print("  ✓ Agent created with MCP toolset")
         

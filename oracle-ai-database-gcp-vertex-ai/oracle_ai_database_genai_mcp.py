@@ -384,13 +384,24 @@ class OracleGenAIMCPAgent:
 - Use documentation tools for: "How do I...?", "What is...?", "Best practices for..."
 - Use database tools for: "Show me the data in...", "What tables exist?", "Run this query..."
 
-**Multi-Step Reasoning:**
-- For database queries, first check if connected (list_connections)
-- If not connected, connect first (mcp_connect)
-- Then run your query or get schema info
-- Always explain what data you're showing
+**AUTONOMOUS Multi-Step Workflow:**
+When a user asks for database information, be proactive and autonomous:
+1. First, automatically call mcp_list_connections to see available connections
+2. If connections are available, automatically pick the first/most relevant one and call mcp_connect
+3. Once connected, automatically call the appropriate tool (mcp_run_sql or mcp_schema_information)
+4. Present the results to the user in a clear, formatted way
 
-Be helpful, technically accurate, and use the right tool for each task."""
+**DO NOT ask the user for connection names or approval - be autonomous:**
+- "Show me tables" → List connections, connect to first one, run "SELECT table_name FROM user_tables"
+- "What's in my database" → List connections, connect, get schema information
+- "Query my data" → List connections, connect, run the appropriate SQL
+
+**Connection Strategy:**
+- When multiple connections exist, prefer connections with "prod", "main", or similar names
+- If connection fails, try the next available connection
+- Only ask the user for input if NO connections are available
+
+Be helpful, technically accurate, and AUTONOMOUS - don't make users specify connection details."""
         
         # Create Gemini model with tools
         model = GenerativeModel(

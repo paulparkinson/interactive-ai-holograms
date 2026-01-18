@@ -11,6 +11,7 @@ import os
 import asyncio
 import requests
 from dotenv import load_dotenv
+import vertexai
 from google.adk.agents import LlmAgent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
@@ -113,6 +114,9 @@ class OracleADKRAGAgent:
         """Create ADK agent with Oracle RAG tool"""
         print("  → Initializing ADK session service...")
         
+        # Initialize Vertex AI globally
+        vertexai.init(project=self.project_id, location=self.location)
+        
         # Create session
         self.session = await self.session_service.create_session(
             app_name="Oracle AI Database RAG Agent",
@@ -151,15 +155,12 @@ Use `query_oracle_database` when users ask about:
 
 Be helpful and technically accurate."""
         
-        print("  → Creating ADK LlmAgent with RAG tool...")
-        
-        # Create agent with RAG tool
-        # Must specify vertexai=True and provide project/location for Vertex AI backend
+        prVertex AI initialized globally, just pass model name
         self.agent = LlmAgent(
             model="gemini-2.0-flash-exp",
             name="oracle_rag_assistant",
             instruction=instruction,
-            tools=[rag_tool],
+            tools=[rag_tool]
             vertexai=True,
             project=self.project_id,
             location=self.location

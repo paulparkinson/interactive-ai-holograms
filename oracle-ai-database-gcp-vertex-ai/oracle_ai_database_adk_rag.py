@@ -25,34 +25,18 @@ load_dotenv()
 class OracleRAGTool(BaseTool):
     """Custom ADK tool for querying Oracle RAG API"""
     
+    # Define tool metadata as class attributes for ADK
+    name = "query_oracle_database"
+    description = "Search the Oracle Database knowledge base for information about Oracle Database features, spatial capabilities, vector search, JSON features, SQL enhancements, and other database topics. Use this for technical questions that require specific documentation or feature details."
+    
     def __init__(self, api_url: str):
         """Initialize the RAG tool
         
         Args:
             api_url: Base URL of the Oracle RAG API
         """
+        super().__init__()
         self.api_url = api_url.rstrip('/')
-        
-        # Define tool metadata for ADK
-        super().__init__(
-            name="query_oracle_database",
-            description="Search the Oracle Database knowledge base for information about Oracle Database features, spatial capabilities, vector search, JSON features, SQL enhancements, and other database topics. Use this for technical questions that require specific documentation or feature details.",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "The detailed question or search query about Oracle Database"
-                    },
-                    "top_k": {
-                        "type": "integer",
-                        "description": "Number of relevant document chunks to retrieve (1-20). Default is 5.",
-                        "default": 5
-                    }
-                },
-                "required": ["query"]
-            }
-        )
     
     async def execute(self, query: str, top_k: int = 5) -> str:
         """Execute the RAG query

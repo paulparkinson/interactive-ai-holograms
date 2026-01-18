@@ -165,8 +165,6 @@ Be helpful and technically accurate."""
             instruction=instruction,
             tools=[rag_tool]
         )
-            location=self.location
-        )
         
         print("  ✓ Agent created with RAG tool")
         

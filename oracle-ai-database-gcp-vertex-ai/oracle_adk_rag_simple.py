@@ -154,6 +154,7 @@ async def main():
             # Run the agent
             async for event in runner.run_async(
                 session_id=session_id,
+                user_id="oracle_user",
                 new_message=user_input
             ):
                 if hasattr(event, 'content') and event.content:

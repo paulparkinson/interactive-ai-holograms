@@ -9,7 +9,6 @@ This version uses:
 - No manual vertexai.init() in agent code
 """
 import os
-import asyncio
 import requests
 from dotenv import load_dotenv
 from google.adk.agents import Agent
@@ -121,7 +120,7 @@ agent = Agent(
 # MAIN EXECUTION
 # =============================================================================
 
-async def main():
+def main():
     """Main execution function"""
     print("\n" + "="*70)
     print("Oracle Database RAG Agent (ADK Simplified)")
@@ -136,6 +135,7 @@ async def main():
         session_service=session_service
     )
     session_id = "oracle_rag_session"
+    user_id = "oracle_user"
     
     while True:
         try:
@@ -151,10 +151,10 @@ async def main():
             
             print("\nAgent: ", end="", flush=True)
             
-            # Run the agent
-            async for event in runner.run_async(
+            # Run the agent synchronously
+            for event in runner.run(
                 session_id=session_id,
-                user_id="oracle_user",
+                user_id=user_id,
                 new_message=user_input
             ):
                 if hasattr(event, 'content') and event.content:
@@ -175,4 +175,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

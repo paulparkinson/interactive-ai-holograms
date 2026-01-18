@@ -7,14 +7,15 @@ This version uses:
 - FunctionTool wrapper
 - Clean separation of tools and agent
 - No manual vertexai.init() in agent code
-
-Run with: adk run rag
 """
 import os
+import asyncio
 import requests
 from dotenv import load_dotenv
 from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
 from typing import Dict, Any
 
 # Load environment variables
@@ -115,5 +116,62 @@ agent = Agent(
     tools=[query_oracle_tool]
 )
 
-# Make agent discoverable by ADK CLI
-root_agent = agent
+
+# =============================================================================
+# MAIN EXECUTION
+# =============================================================================
+
+async def main():
+    """Main execution function"""
+    print("\n" + "="*70)
+    print("Oracle Database RAG Agent (ADK Simplified)")
+    print("="*70)
+    print("\nType your questions about Oracle Database. Type 'exit' to quit.\n")
+    
+    # Create runner
+    session_service = InMemorySessionService()
+    runner = Runner(
+        app_name="oracle_rag",
+        agent=agent,
+        session_service=session_service
+    )
+    session_id = "oracle_rag_session"
+    
+    while True:
+        try:
+            # Get user input
+            user_input = input("\nYou: ").strip()
+            
+            if not user_input:
+                continue
+                
+            if user_input.lower() in ['exit', 'quit', 'q']:
+                print("\nGoodbye! 👋")
+                break
+            
+            print("\nAgent: ", end="", flush=True)
+            
+            # Run the agent
+            async for event in runner.run_async(
+                session_id=session_id,
+                new_message=user_input
+            ):
+                if hasattr(event, 'content') and event.content:
+                    if hasattr(event.content, 'parts'):
+                        for part in event.content.parts:
+                            if hasattr(part, 'text') and part.text:
+                                print(part.text, end="", flush=True)
+            
+            print()  # New line after response
+            
+        except KeyboardInterrupt:
+            print("\n\nGoodbye! 👋")
+            break
+        except Exception as e:
+            print(f"\n❌ Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

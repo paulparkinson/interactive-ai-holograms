@@ -30,5 +30,5 @@ echo "Location: $GOOGLE_CLOUD_LOCATION"
 echo "RAG API: ${RAG_API_URL:-http://localhost:8501}"
 echo ""
 
-# Run the agent using ADK CLI
-adk run rag
+# Run the agent
+python oracle_adk_rag_simple.py

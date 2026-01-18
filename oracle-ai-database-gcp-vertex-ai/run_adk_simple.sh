@@ -9,7 +9,7 @@ echo "======================================================="
 # Check if .env file exists
 if [ ! -f .env ]; then
     echo "Error: .env file not found!"
-    echo "Please create .env file with RAG_API_URL"
+    echo "Please create .env file with RAG_API_URL=http://localhost:8501"
     exit 1
 fi
 
@@ -18,7 +18,7 @@ source .env
 
 # Check if RAG API URL is set
 if [ -z "$RAG_API_URL" ]; then
-    echo "Warning: RAG_API_URL not set in .env, using default http://localhost:8000"
+    echo "Warning: RAG_API_URL not set in .env, using default http://localhost:8501"
 fi
 
 # Set Google Cloud environment variables
@@ -27,8 +27,8 @@ export GOOGLE_CLOUD_LOCATION="${GOOGLE_CLOUD_LOCATION:-us-central1}"
 
 echo "Project: $GOOGLE_CLOUD_PROJECT"
 echo "Location: $GOOGLE_CLOUD_LOCATION"
-echo "RAG API: ${RAG_API_URL:-http://localhost:8000}"
+echo "RAG API: ${RAG_API_URL:-http://localhost:8501}"
 echo ""
 
-# Run the agent
-python oracle_adk_rag_simple.py
+# Run the agent using ADK CLI
+adk run rag

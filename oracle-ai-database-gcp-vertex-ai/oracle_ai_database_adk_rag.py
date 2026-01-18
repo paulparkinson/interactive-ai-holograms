@@ -117,6 +117,11 @@ class OracleADKRAGAgent:
         # Initialize Vertex AI globally
         vertexai.init(project=self.project_id, location=self.location)
         
+        # Set environment variables for ADK/GenAI SDK to use Vertex AI
+        os.environ['GOOGLE_CLOUD_PROJECT'] = self.project_id
+        os.environ['GOOGLE_CLOUD_LOCATION'] = self.location
+        os.environ['GOOGLE_GENAI_USE_VERTEXAI'] = 'true'
+        
         # Create session
         self.session = await self.session_service.create_session(
             app_name="Oracle AI Database RAG Agent",

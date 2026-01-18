@@ -92,8 +92,8 @@ else:
 - OS: Linux (GCP Compute Engine)
 
 ## Where to Report
-**Repository:** https://github.com/googleapis/python-genai  
-**Component:** google-adk  
+**Repository:** https://github.com/google/adk-python  
+**File:** https://github.com/google/adk-python/blob/main/src/google/adk/tools/_gemini_schema_util.py  
 **Issue Title:** "McpToolset schema converter fails with array properties in Oracle SQLcl MCP"
 
 Attach:

@@ -77,11 +77,11 @@ This is a bug in ADK v1.22.1 that we cannot work around. See bug report below.
 
 ## 🐛 Bug Report for Google
 
-**Where to file:** https://github.com/googleapis/python-genai/issues
+**Where to file:** https://github.com/google/adk-python/issues
 
 **What to attach:**
 1. [BUG_REPORT_ADK_MCP.md](BUG_REPORT_ADK_MCP.md) - Full bug details
-2. [adk_mcp_bug_reproducer.py](adk_mcp_bug_reproducer.py) - Minimal reproducer script
+2. [adk_mcp_bug_reproducer.py](../adk_mcp_bug_reproducer.py) - Minimal reproducer script
 
 **Bug title:** "McpToolset schema converter fails with array properties in Oracle SQLcl MCP"
 
@@ -129,7 +129,7 @@ This will reproduce the exact error with minimal code.
    Try: "show me all tables" (should auto-connect now)
 
 4. **File bug with Google:**
-   - Go to: https://github.com/googleapis/python-genai/issues/new
+   - Go to: https://github.com/google/adk-python/issues/new
    - Title: "McpToolset schema converter fails with array properties in Oracle SQLcl MCP"
    - Attach: `BUG_REPORT_ADK_MCP.md` and `adk_mcp_bug_reproducer.py`
 

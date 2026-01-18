@@ -155,14 +155,16 @@ Use `query_oracle_database` when users ask about:
 
 Be helpful and technically accurate."""
         
-        prVertex AI initialized globally, just pass model name
+        print("  → Creating ADK LlmAgent with RAG tool...")
+        
+        # Create agent with RAG tool
+        # Vertex AI initialized globally, just pass model name
         self.agent = LlmAgent(
             model="gemini-2.0-flash-exp",
             name="oracle_rag_assistant",
             instruction=instruction,
             tools=[rag_tool]
-            vertexai=True,
-            project=self.project_id,
+        )
             location=self.location
         )
         

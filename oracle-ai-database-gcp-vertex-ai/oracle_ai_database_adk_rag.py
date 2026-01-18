@@ -154,11 +154,15 @@ Be helpful and technically accurate."""
         print("  → Creating ADK LlmAgent with RAG tool...")
         
         # Create agent with RAG tool
+        # Must specify vertexai=True and provide project/location for Vertex AI backend
         self.agent = LlmAgent(
             model="gemini-2.0-flash-exp",
             name="oracle_rag_assistant",
             instruction=instruction,
-            tools=[rag_tool]
+            tools=[rag_tool],
+            vertexai=True,
+            project=self.project_id,
+            location=self.location
         )
         
         print("  ✓ Agent created with RAG tool")

@@ -136,9 +136,9 @@ def main():
         session_service=session_service
     )
     
-    # Create a session
+    # Session will be auto-created on first run
     user_id = "oracle_user"
-    session_id = session_service.create_session(user_id=user_id)
+    session_id = "default"
     
     while True:
         try:

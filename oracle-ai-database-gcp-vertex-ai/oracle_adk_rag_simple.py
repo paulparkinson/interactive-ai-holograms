@@ -135,8 +135,6 @@ def main():
         agent=agent,
         session_service=session_service
     )
-    session_id = "oracle_rag_session"
-    user_id = "oracle_user"
     
     while True:
         try:
@@ -158,10 +156,9 @@ def main():
                 parts=[Part(text=user_input)]
             )
             
-            # Run the agent
+            # Run the agent - let ADK auto-manage session_id
             for event in runner.run(
-                session_id=session_id,
-                user_id=user_id,
+                user_id="oracle_user",
                 new_message=message
             ):
                 if hasattr(event, 'content') and event.content:

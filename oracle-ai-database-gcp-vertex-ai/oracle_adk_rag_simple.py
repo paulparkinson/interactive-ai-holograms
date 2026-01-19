@@ -128,13 +128,17 @@ def main():
     print("="*70)
     print("\nType your questions about Oracle Database. Type 'exit' to quit.\n")
     
-    # Create runner
+    # Create session service and runner
     session_service = InMemorySessionService()
     runner = Runner(
         app_name="oracle_rag",
         agent=agent,
         session_service=session_service
     )
+    
+    # Create a session
+    user_id = "oracle_user"
+    session_id = session_service.create_session(user_id=user_id)
     
     while True:
         try:
@@ -156,9 +160,10 @@ def main():
                 parts=[Part(text=user_input)]
             )
             
-            # Run the agent - let ADK auto-manage session_id
+            # Run the agent
             for event in runner.run(
-                user_id="oracle_user",
+                session_id=session_id,
+                user_id=user_id,
                 new_message=message
             ):
                 if hasattr(event, 'content') and event.content:

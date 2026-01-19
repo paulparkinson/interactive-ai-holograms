@@ -15,6 +15,7 @@ from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
+from google.genai.types import Content, Part
 from typing import Dict, Any
 
 # Load environment variables
@@ -151,11 +152,17 @@ def main():
             
             print("\nAgent: ", end="", flush=True)
             
-            # Run the agent synchronously
+            # Create proper Content message
+            message = Content(
+                role="user",
+                parts=[Part(text=user_input)]
+            )
+            
+            # Run the agent
             for event in runner.run(
                 session_id=session_id,
                 user_id=user_id,
-                new_message=user_input
+                new_message=message
             ):
                 if hasattr(event, 'content') and event.content:
                     if hasattr(event.content, 'parts'):

@@ -109,8 +109,9 @@ def main():
       st.success(f"✓ Uploaded and vectorized PDF in {round(s2time - s1time, 1)} seconds")
 
     # Initialize LLM after Vertex AI is initialized
+    # Using stable gemini-2.0-flash-001 instead of experimental to avoid rate limits
     llm = VertexAI(
-        model_name="gemini-2.0-flash-exp",
+        model_name="gemini-2.0-flash-001",
         max_output_tokens=8192,
         temperature=0.7,
         top_p=0.8,

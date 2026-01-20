@@ -1,175 +1,232 @@
 """
-Oracle AI Database ADK Agent with MCP Integration
-Google Agent Development Kit (ADK) agent that uses:
-- Oracle RAG API for vector search via FunctionDeclaration
-- Oracle MCP Server for direct database queries via McpToolset
+Oracle AI Database ADK Agent - Direct RAG Implementation
+Uses Google Agent Development Kit (ADK) with direct Oracle Vector Store integration.
 
-Note: Uses oracle_mcp_wrapper to work around ADK v1.22.1 schema converter bug
-Bug: AttributeError: 'list' object has no attribute 'items'
-Location: google/adk/tools/_gemini_schema_util.py line 160
+This version:
+- Connects directly to Oracle Database with vector storage
+- Implements RAG using langchain + Vertex AI embeddings
+- Uses ADK LlmAgent with custom RAG tool
+- Same functionality as oracle_ai_database_gemini_rag.ipynb notebook
 """
 import os
 import asyncio
-import requests
 from dotenv import load_dotenv
+import vertexai
+import oracledb
 from google.adk.agents import LlmAgent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
-from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioServerParameters
-from google.adk.tools.mcp_tool import StdioConnectionParams
+from google.adk.tools import BaseTool
 from google.genai import types
-
-# Import schema wrapper to fix ADK MCP bug
-from oracle_mcp_wrapper import patch_mcp_toolset
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_community.vectorstores.oraclevs import OracleVS
+from langchain_community.vectorstores.utils import DistanceStrategy
 
 # Load environment variables
 load_dotenv()
 
-# Patch McpToolset to handle complex Oracle schemas
-print("  → Applying MCP schema wrapper patch for ADK v1.22.1...")
-patch_mcp_toolset()
-print("  ✓ MCP schema wrapper applied")
 
-class OracleRAGMCPAgent:
-    """Agent that uses Oracle Database RAG API and MCP Server for answering questions"""
+class OracleRAGTool(BaseTool):
+    """Custom ADK tool for querying Oracle Vector Store directly"""
     
-    def __init__(self, api_url: str, project_id: str, location: str, 
-                 sqlcl_path: str = "/opt/sqlcl/bin/sql",
-                 wallet_path: str = None):
-        """
-        Initialize the Oracle RAG Agent with MCP integration
+    def __init__(self, knowledge_base: OracleVS):
+        """Initialize the RAG tool
         
         Args:
-            api_url: Base URL of the Oracle RAG API
+            knowledge_base: Oracle Vector Store instance
+        """
+        super().__init__(
+            name="query_oracle_database",
+            description="Search the Oracle Database knowledge base for information about Oracle Database features, spatial capabilities, vector search, JSON features, SQL enhancements, and other database topics. Use this for technical questions that require specific documentation or feature details."
+        )
+        self.knowledge_base = knowledge_base
+    
+    async def execute(self, query: str, top_k: int = 5) -> str:
+        """Execute the RAG query
+        
+        Args:
+            query: The question to ask
+            top_k: Number of similar chunks to retrieve
+            
+        Returns:
+            String with relevant context from documentation
+        """
+        try:
+            print(f"  → Searching vector store: {query[:60]}...")
+            
+            # Perform similarity search
+            result_chunks = self.knowledge_base.similarity_search(query, k=top_k)
+            
+            if not result_chunks:
+                return "No relevant documentation found for this query."
+            
+            # Format context from chunks
+            context_parts = []
+            for i, chunk in enumerate(result_chunks, 1):
+                context_parts.append(f"[{i}] {chunk.page_content}")
+            
+            context = "\n\n".join(context_parts)
+            return f"Found {len(result_chunks)} relevant documentation sections:\n\n{context}"
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return f"Failed to query the knowledge base: {str(e)}"
+
+
+class OracleADKRAGAgent:
+    """ADK Agent for Oracle Database documentation search with direct vector store"""
+    
+    def __init__(self, project_id: str, location: str):
+        """
+        Initialize the ADK RAG Agent
+        
+        Args:
             project_id: GCP project ID
             location: GCP region
-            sqlcl_path: Path to SQLcl executable for MCP server
-            wallet_path: Path to Oracle wallet directory
         """
-        self.api_url = api_url.rstrip('/')
         self.project_id = project_id
         self.location = location
-        self.sqlcl_path = sqlcl_path
-        self.wallet_path = wallet_path or os.path.expanduser("~/wallet")
         self.agent = None
         self.runner = None
         self.session_service = InMemorySessionService()
         self.artifacts_service = InMemoryArtifactService()
         self.session = None
+        self.connection = None
+        self.knowledge_base = None
         
-    def query_oracle_database_docs(self, query: str, top_k: int = 5) -> str:
-        """
-        Query the Oracle RAG knowledge base for Oracle Database documentation
-        This is implemented as a regular function for use with ADK
+    def connect_database(self):
+        """Connect to Oracle Database and initialize vector store"""
+        print("  → Connecting to Oracle Database...")
         
-        Args:
-            query: The question to ask about Oracle Database
-            top_k: Number of similar chunks to retrieve
-            
-        Returns:
-            String with the answer from documentation
-        """
+        # Load credentials from environment
+        un = os.getenv("DB_USERNAME")
+        pw = os.getenv("DB_PASSWORD")
+        dsn = os.getenv("DB_DSN")
+        wallet_path = os.getenv("DB_WALLET_DIR")
+        wpwd = os.getenv("DB_WALLET_PASSWORD", "")
+        
+        if not all([un, pw, dsn, wallet_path]):
+            raise ValueError("Missing database credentials in .env file")
+        
+        # Connect to database
+        self.connection = oracledb.connect(
+            config_dir=wallet_path,
+            user=un,
+            password=pw,
+            dsn=dsn,
+            wallet_location=wallet_path,
+            wallet_password=wpwd
+        )
+        
+        print(f"  ✓ Connected to {dsn}")
+        
+        # Check how many documents are in the store
+        with self.connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM RAG_TAB")
+            count = cursor.fetchone()[0]
+            print(f"  ✓ Found {count} document chunks in RAG_TAB")
+        
+        # Initialize Vertex AI embeddings with retry logic
+        print("  → Initializing Vertex AI embeddings...")
         try:
-            response = requests.post(
-                f"{self.api_url}/query",
-                json={"query": query, "top_k": top_k},
-                timeout=30
+            embeddings = GoogleGenerativeAIEmbeddings(model="text-embedding-004")
+            
+            # Connect to existing vector store
+            print("  → Connecting to vector store RAG_TAB...")
+            self.knowledge_base = OracleVS(
+                client=self.connection,
+                embedding_function=embeddings,
+                table_name="RAG_TAB",
+                distance_strategy=DistanceStrategy.DOT_PRODUCT
             )
-            response.raise_for_status()
-            result = response.json()
-            return result.get("answer", "No answer found in documentation")
-        except Exception as e:
-            return f"Error querying documentation: {str(e)}"
-    
-    def get_api_status(self) -> dict:
-        """Get the status of the Oracle RAG API"""
-        try:
-            response = requests.get(f"{self.api_url}/status", timeout=10)
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            return {"error": f"Failed to get API status: {str(e)}", "status": "unavailable"}
             
-            return "No response from MCP tool"
+            print(f"  ✓ Vector store ready")
             
         except Exception as e:
-            return f"Error calling MCP tool: {str(e)}"
+            print(f"  ⚠️  Error initializing vector store: {str(e)}")
+            print("  → Please ensure you've run: gcloud auth application-default login")
+            raise
+        
+        return self.knowledge_base
     
     async def create_agent_async(self):
-        """
-        Create ADK agent with Oracle RAG function and MCP database tools
-        Following official ADK MCP pattern from:
-        https://github.com/GoogleCloudPlatform/generative-ai/blob/main/gemini/mcp/adk_mcp_app/main.py
-        """
+        """Create ADK agent with Oracle RAG tool"""
         print("  → Initializing ADK session service...")
+        
+        # Initialize Vertex AI globally
+        vertexai.init(project=self.project_id, location=self.location)
+        
+        # Set environment variables for ADK/GenAI SDK to use Vertex AI
+        os.environ['GOOGLE_CLOUD_PROJECT'] = self.project_id
+        os.environ['GOOGLE_CLOUD_LOCATION'] = self.location
+        os.environ['GOOGLE_GENAI_USE_VERTEXAI'] = 'true'
+        
+        # Connect to database and initialize vector store
+        self.connect_database()
         
         # Create session
         self.session = await self.session_service.create_session(
-            app_name="Oracle AI Database Agent",
+            app_name="Oracle AI Database RAG Agent",
             user_id="user_123",
             state={}
         )
         
-        # Create StdioServerParameters for SQLcl MCP server
-        # Set protocol version to match server (2024-11-05) to avoid negotiation issues
-        mcp_server_params = StdioServerParameters(
-            command=self.sqlcl_path,
-            args=["-mcp"],
-            env={"TNS_ADMIN": self.wallet_path}
-        )
-        
-        # Wrap in StdioConnectionParams with explicit protocol version
-        # This fixes the protocol version mismatch error:
-        # Client was requesting 2025-11-25, server offers 2024-11-05
-        mcp_connection_params = StdioConnectionParams(
-            server_params=mcp_server_params,
-            protocol_version="2024-11-05"  # Match Oracle SQLcl MCP server version
-        )
+        # Create custom RAG tool with vector store
+        rag_tool = OracleRAGTool(self.knowledge_base)
         
         # Define agent instruction
-        instruction = """You are an expert Oracle Database AI assistant with access to:
+        instruction = """You are an expert Oracle Database AI assistant with access to comprehensive documentation.
 
-1. **query_oracle_database_docs**: Search Oracle Database documentation (features, spatial, vector search, JSON, SQL)
-2. **MCP Database Tools**: Direct database operations via Oracle SQLcl MCP server
+**Your Capability:**
+Use the `query_oracle_database` tool to search Oracle Database documentation for information about:
+- Database features and functionality
+- SQL syntax, commands, and best practices
+- Vector search, spatial data, JSON capabilities
+- Performance optimization and configuration
+- New features in recent Oracle versions
+- Technical implementation details
 
-**Usage Strategy:**
-- Data queries ("show", "list tables", "run SQL", "get schema") → use MCP tools
-- For database operations: list-connections → connect → run-sql or schema-information
-- Documentation questions can be answered from your knowledge or by querying the database
+**When to Use the Tool:**
+Use `query_oracle_database` when users ask about:
+- Specific Oracle Database features ("What is vector search?")
+- How to do something in Oracle ("How do I create a JSON table?")
+- SQL syntax or commands
+- Database administration or configuration
+- Best practices and optimization
 
-Always be helpful, concise, and technically accurate."""
+**Response Style:**
+- Be concise but thorough
+- Cite specific features or capabilities when possible
+- If the documentation doesn't have the answer, say so clearly
+- Format technical content with examples when helpful
+
+Be helpful and technically accurate."""
         
-        print("  → Creating ADK LlmAgent with MCP integration...")
+        print("  → Creating ADK LlmAgent with RAG tool...")
         
-        # Create agent with MCP tools directly via McpToolset
-        # Following official ADK MCP pattern
-        # Note: Increased timeouts to handle MCP server initialization
-        try:
-            self.agent = LlmAgent(
-                model="gemini-2.0-flash-exp",
-                name="oracle_assistant",
-                instruction=instruction,
-                tools=[McpToolset(
-                    connection_params=mcp_connection_params,
-                    # Add timeout configuration if supported
-                    timeout=120.0  # 2 minute timeout for MCP operations
-                )]
+        # Create agent with RAG tool
+        # Using gemini-2.0-flash-001 (stable version, not experimental)
+        # This has better rate limits than -exp variants
+        from google.genai.types import GenerateContentConfig
+        
+        self.agent = LlmAgent(
+            model="gemini-2.0-flash-001",
+            name="oracle_rag_assistant",
+            instruction=instruction,
+            tools=[rag_tool],
+            generate_content_config=GenerateContentConfig(
+                temperature=0.2,
+                max_output_tokens=2048,
             )
-        except TypeError:
-            # If timeout parameter not supported, fallback to default
-            self.agent = LlmAgent(
-                model="gemini-2.0-flash-exp",
-                name="oracle_assistant",
-                instruction=instruction,
-                tools=[McpToolset(connection_params=mcp_connection_params)]
-            )
+        )
         
-        print("  ✓ Agent created with MCP toolset")
+        print("  ✓ Agent created with RAG tool")
         
         # Create runner
         self.runner = Runner(
-            app_name="Oracle AI Database Agent",
+            app_name="Oracle AI Database RAG Agent",
             agent=self.agent,
             artifact_service=self.artifacts_service,
             session_service=self.session_service
@@ -183,7 +240,7 @@ Always be helpful, concise, and technically accurate."""
         Query the agent asynchronously using ADK Runner
         
         Args:
-            user_input: User's question or request
+            user_input: User's question
             
         Returns:
             Agent response as string
@@ -224,30 +281,20 @@ Always be helpful, concise, and technically accurate."""
         """Cleanup resources"""
         if self.runner:
             await self.runner.close()
-    
+        if self.connection:
+            self.connection.close()
+            print("  ✓ Database connection closed")
     
     async def run_cli_async(self):
         """Run interactive CLI interface with ADK"""
         print("=" * 80)
-        print("Oracle Database AI Agent with RAG + MCP (powered by Google ADK)")
+        print("Oracle Database ADK RAG Agent (Direct Vector Store)")
         print("=" * 80)
-        print(f"RAG API URL: {self.api_url}")
-        print(f"SQLcl Path: {self.sqlcl_path}")
-        print(f"Wallet Path: {self.wallet_path}")
         print(f"Project: {self.project_id}")
         print(f"Region: {self.location}")
         print()
         
-        # Check API status
-        status = self.get_api_status()
-        if "error" not in status:
-            print(f"✓ Knowledge base: {status['document_count']} documents")
-            print(f"✓ RAG API Status: {status['status']}")
-        else:
-            print(f"⚠️  Warning: {status.get('error', 'RAG API unavailable')}")
-        
-        print()
-        print("🔧 Initializing ADK agent with MCP tools...")
+        print("🔧 Initializing ADK agent with RAG tool...")
         
         try:
             await self.create_agent_async()
@@ -290,24 +337,19 @@ Always be helpful, concise, and technically accurate."""
             traceback.print_exc()
             await self.cleanup_async()
 
+
 async def main():
     """Main entry point"""
-    # Configuration
-    api_url = os.getenv("ORACLE_RAG_API_URL", "http://localhost:8501")
+    # Configuration from environment
     project_id = os.getenv("GCP_PROJECT_ID", "adb-pm-prod")
     location = os.getenv("GCP_REGION", "us-central1")
-    sqlcl_path = os.getenv("SQLCL_PATH", "/opt/sqlcl/bin/sql")
-    wallet_path = os.getenv("TNS_ADMIN", os.path.expanduser("~/wallet"))
+    
+    print("Starting Oracle ADK RAG Agent...\n")
     
     # Create and run agent
-    agent = OracleRAGMCPAgent(
-        api_url=api_url,
-        project_id=project_id,
-        location=location,
-        sqlcl_path=sqlcl_path,
-        wallet_path=wallet_path
-    )
+    agent = OracleADKRAGAgent(project_id, location)
     await agent.run_cli_async()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

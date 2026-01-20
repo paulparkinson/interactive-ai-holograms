@@ -75,3 +75,8 @@ venv/
 *.backup
 *.old
 *~
+# Jupyter Notebook outputs
+**/.ipynb_checkpoints/
+**/[Uu]ntitled*.ipynb
+# Optionally ignore all execution outputs in notebooks:
+# *.ipynb

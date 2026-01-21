@@ -7,6 +7,9 @@ google-adk>=1.4.2
 google-genai>=1.0.0
 mcp>=0.9.0
 
+# MCP Toolbox for Databases (recommended for production)
+toolbox-core>=0.24.0
+
 # LangChain for RAG
 langchain>=0.3.7
 langchain-core>=0.3.15

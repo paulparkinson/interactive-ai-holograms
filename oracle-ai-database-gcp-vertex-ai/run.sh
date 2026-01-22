@@ -24,19 +24,18 @@ fi
 show_menu() {
     clear
     echo -e "${BLUE}╔════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BLUE}║${NC}  ${CYAN}Agentic AI with Oracle AI Database and Vertex AI + Gemini - Application Launcher${NC}                     ${BLUE}║${NC}"
+    echo -e "${BLUE}║${NC}  ${CYAN}Agentic AI with Oracle AI Database and Vertex AI + Gemini${NC}          ${BLUE}║${NC}"
+    echo -e "${BLUE}║${NC}  ${CYAN}Application Launcher${NC}                                                ${BLUE}║${NC}"
     echo -e "${BLUE}╚════════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
     echo -e "${YELLOW}⚠️  PREREQUISITE:${NC} Run ${CYAN}oracle_ai_database_gemini_rag.ipynb${NC} in Jupyter/VS Code first"
     echo -e "    to create the required database tables and vector indexes."
     echo ""
-    echo -e "${GREEN}RAG Applications:${NC}"
     echo "  1) Streamlit RAG UI (LangChain + Vertex AI)"
     echo "     → oracle_ai_database_langchain_streamlit.py"
     echo "     → User-friendly web interface for PDF Q&A"
     echo ""
-    echo -e "${GREEN}Agent Frameworks (ADK):${NC}"
-    echo "  2) ADK Agent with Custom BaseTool ⭐ RECOMMENDED"
+    echo "  2) ADK Agent with Custom BaseTool"
     echo "     → oracle_ai_database_adk_agent.py"
     echo "     → Direct OracleVS integration, works on ALL platforms"
     echo ""
@@ -44,17 +43,12 @@ show_menu() {
     echo "     → oracle_ai_database_adk_mcp_agent.py"
     echo "     → Google's MCP Toolbox - requires AMD64 platform"
     echo ""
-    echo -e "${GREEN}GenerativeModel + MCP:${NC}"
     echo "  4) GenerativeModel with Oracle SQLcl MCP (Requires Java)"
     echo "     → oracle_ai_database_genai_mcp.py"
     echo "     → Direct Vertex AI GenerativeModel + manual MCP protocol"
     echo ""
-    echo -e "${GREEN}Utilities:${NC}"
-    echo "  5) Test ADK Agent"
-    echo "     → Run automated tests for ADK agent"
-    echo ""
     echo -e "${YELLOW}Other Options:${NC}"
-    echo "  6) Show environment configuration"
+    echo "  5) Show environment configuration"
     echo "  0) Exit"
     echo ""
     echo -e "${BLUE}────────────────────────────────────────────────────────────────────${NC}"
@@ -93,12 +87,6 @@ run_genai_mcp() {
     python oracle_ai_database_genai_mcp.py
 }
 
-run_tests() {
-    echo -e "${CYAN}Running ADK Agent Tests...${NC}"
-    echo ""
-    bash test_oracle_ai_database_adk_agent.sh
-}
-
 show_config() {
     echo -e "${CYAN}Environment Configuration:${NC}"
     echo ""
@@ -126,7 +114,7 @@ show_config() {
 # Main loop
 while true; do
     show_menu
-    echo -n "Enter your choice [0-6]: "
+    echo -n "Enter your choice [0-5]: "
     read choice
     echo ""
     
@@ -144,9 +132,6 @@ while true; do
             run_genai_mcp
             ;;
         5)
-            run_tests
-            ;;
-        6)
             show_config
             ;;
         0)
@@ -160,7 +145,7 @@ while true; do
     esac
     
     # After running a command, wait for user
-    if [ "$choice" != "6" ] && [ "$choice" != "0" ]; then
+    if [ "$choice" != "5" ] && [ "$choice" != "0" ]; then
         echo ""
         echo -e "${YELLOW}Press Enter to return to menu...${NC}"
         read

@@ -1,16 +1,12 @@
 """
 Oracle AI Database Agent with GenerativeModel + Manual MCP Integration
-Combines:
-- GenerativeModel approach from oracle_ai_database_adk_fullagent.py (for RAG)
-- Manual MCP subprocess integration for Oracle SQLcl tools
 
-This approach bypasses ADK's buggy McpToolset to use MCP directly.
+Direct database access via Oracle SQLcl MCP protocol.
+Uses GenerativeModel with manual MCP subprocess integration.
 """
 import os
 import json
 import asyncio
-import requests
-import subprocess
 from dotenv import load_dotenv
 from google.cloud import aiplatform
 import vertexai
@@ -187,22 +183,20 @@ class MCPClient:
 
 
 class OracleGenAIMCPAgent:
-    """Agent using GenerativeModel with RAG + manual MCP integration"""
+    """Agent using GenerativeModel with manual MCP integration for Oracle Database"""
     
-    def __init__(self, api_url: str, project_id: str, location: str,
+    def __init__(self, project_id: str, location: str,
                  sqlcl_path: str = "/opt/sqlcl/bin/sql",
                  wallet_path: str = None):
         """
         Initialize the agent
         
         Args:
-            api_url: Base URL of the Oracle RAG API
             project_id: GCP project ID
             location: GCP region
             sqlcl_path: Path to SQLcl executable
             wallet_path: Path to Oracle wallet directory
         """
-        self.api_url = api_url.rstrip('/')
         self.project_id = project_id
         self.location = location
         self.sqlcl_path = sqlcl_path
@@ -227,63 +221,8 @@ class OracleGenAIMCPAgent:
         
         print("✓ Agent ready!\n")
     
-    def query_oracle_rag(self, query: str, top_k: int = 5) -> dict:
-        """Query the Oracle RAG knowledge base"""
-        try:
-            response = requests.post(
-                f"{self.api_url}/query",
-                json={"query": query, "top_k": top_k},
-                timeout=120
-            )
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            return {
-                "error": str(e),
-                "answer": f"Error querying knowledge base: {str(e)}"
-            }
-    
-    def get_api_status(self) -> dict:
-        """Get the status of the Oracle RAG API"""
-        try:
-            response = requests.get(f"{self.api_url}/status", timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            return {"error": str(e), "status": "unavailable"}
-    
     async def create_agent(self):
-        """Create Gemini agent with RAG and MCP function declarations"""
-        
-        # RAG functions (same as fullagent)
-        query_oracle_function = FunctionDeclaration(
-            name="query_oracle_database",
-            description="Search the Oracle Database knowledge base for information about Oracle Database features, spatial capabilities, vector search, JSON features, SQL enhancements, and other database topics.",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "The detailed question or search query about Oracle Database"
-                    },
-                    "top_k": {
-                        "type": "integer",
-                        "description": "Number of relevant document chunks to retrieve (1-20)",
-                        "default": 5
-                    }
-                },
-                "required": ["query"]
-            }
-        )
-        
-        status_function = FunctionDeclaration(
-            name="check_knowledge_base_status",
-            description="Check the status and availability of the Oracle Database knowledge base system",
-            parameters={
-                "type": "object",
-                "properties": {}
-            }
-        )
+        """Create Gemini agent with MCP function declarations"""
         
         # MCP functions - list available connections
         list_connections_function = FunctionDeclaration(
@@ -356,8 +295,6 @@ class OracleGenAIMCPAgent:
         # Create tool with all function declarations
         oracle_tool = Tool(
             function_declarations=[
-                query_oracle_function,
-                status_function,
                 list_connections_function,
                 connect_function,
                 run_sql_function,
@@ -367,22 +304,14 @@ class OracleGenAIMCPAgent:
         )
         
         # System instructions
-        instructions = """You are an expert Oracle Database AI assistant with two types of capabilities:
+        instructions = """You are an expert Oracle Database AI assistant with direct database access via MCP.
 
-**Documentation Knowledge Base:**
-- Access to comprehensive Oracle Database documentation
-- Use query_oracle_database for questions about features, syntax, best practices
-
-**Direct Database Access (via MCP):**
+**Available Database Tools (via MCP):**
 - List available database connections with mcp_list_connections
 - Connect to databases with mcp_connect
 - Run SQL queries with mcp_run_sql
 - Get schema information with mcp_schema_information
 - Disconnect with mcp_disconnect
-
-**When to Use Each Tool:**
-- Use documentation tools for: "How do I...?", "What is...?", "Best practices for..."
-- Use database tools for: "Show me the data in...", "What tables exist?", "Run this query..."
 
 **AUTONOMOUS Multi-Step Workflow:**
 When a user asks for database information, be proactive and autonomous:
@@ -417,33 +346,8 @@ Be helpful, technically accurate, and AUTONOMOUS - don't make users specify conn
         print(f"  🔧 Tool called: {function_name}({args})")
         
         try:
-            # RAG functions
-            if function_name == "query_oracle_database":
-                query = args.get("query", "")
-                top_k = args.get("top_k", 5)
-                result = self.query_oracle_rag(query, top_k)
-                
-                if "error" in result:
-                    return f"Error: {result['answer']}"
-                
-                response = f"{result['answer']}\n\n"
-                response += f"[Source: {len(result.get('context_chunks', []))} document chunks]"
-                return response
-            
-            elif function_name == "check_knowledge_base_status":
-                status = self.get_api_status()
-                if "error" in status:
-                    return f"Knowledge base unavailable: {status['error']}"
-                
-                return (
-                    f"Knowledge Base Status:\n"
-                    f"- Status: {status['status']}\n"
-                    f"- Documents: {status['document_count']} chunks\n"
-                    f"- Database: {'Connected' if status['database_connected'] else 'Disconnected'}"
-                )
-            
             # MCP functions
-            elif function_name == "mcp_list_connections":
+            if function_name == "mcp_list_connections":
                 filter_str = args.get("filter", "")
                 mcp_args = {}
                 if filter_str:
@@ -536,22 +440,12 @@ Be helpful, technically accurate, and AUTONOMOUS - don't make users specify conn
     async def run_cli(self):
         """Run interactive CLI"""
         print("=" * 80)
-        print("Oracle Database GenAI + MCP Agent (Documentation + Direct DB Access)")
+        print("Oracle Database GenAI + MCP Agent (Direct Database Access)")
         print("=" * 80)
-        print(f"API URL: {self.api_url}")
         print(f"Project: {self.project_id}")
         print(f"SQLcl: {self.sqlcl_path}")
         print()
-        
-        # Check API status
-        status = self.get_api_status()
-        if "error" not in status:
-            print(f"✓ Knowledge base: {status['document_count']} documents")
-        else:
-            print(f"⚠️  Knowledge base: {status.get('error', 'unavailable')}")
-        
-        print()
-        print("Ask questions about Oracle Database or query your databases directly.")
+        print("Query your Oracle databases directly via MCP.")
         print("Commands: 'quit' to exit, 'history' to see conversation")
         print("-" * 80)
         print()
@@ -593,7 +487,6 @@ Be helpful, technically accurate, and AUTONOMOUS - don't make users specify conn
 async def main():
     """Main entry point"""
     # Configuration
-    api_url = os.getenv("ORACLE_RAG_API_URL", "http://34.48.146.146:8501")
     project_id = os.getenv("GCP_PROJECT_ID", "adb-pm-prod")
     location = os.getenv("GCP_REGION", "us-central1")
     sqlcl_path = os.getenv("SQLCL_PATH", "/opt/sqlcl/bin/sql")
@@ -602,7 +495,7 @@ async def main():
     print("Starting GenAI + MCP Agent...\n")
     
     # Create agent
-    agent = OracleGenAIMCPAgent(api_url, project_id, location, sqlcl_path, wallet_path)
+    agent = OracleGenAIMCPAgent(project_id, location, sqlcl_path, wallet_path)
     
     # Initialize (starts MCP)
     await agent.initialize()

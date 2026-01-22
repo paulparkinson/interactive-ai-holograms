@@ -7,6 +7,11 @@ This version:
 - Implements RAG using langchain + Vertex AI embeddings
 - Uses ADK LlmAgent with custom RAG tool
 - Same functionality as oracle_ai_database_gemini_rag.ipynb notebook
+
+Known Limitations:
+- ADK/Gemini 2.0 sometimes shows tool calls as markdown code blocks instead of executing them
+- This is intermittent model behavior - if it happens, try rephrasing your question
+- For more reliable tool execution, use the Streamlit UI (option 1) or GenerativeModel + MCP (option 4)
 """
 import os
 import asyncio
@@ -17,9 +22,10 @@ from google.adk.agents import LlmAgent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
-from google.adk.tools import BaseTool
+from google.adk.tools import BaseTool, ToolContext
 from google.genai import types
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from google.genai.types import Tool, FunctionDeclaration, Schema, Type
+from langchain_google_vertexai import VertexAIEmbeddings
 from langchain_community.vectorstores.oraclevs import OracleVS
 from langchain_community.vectorstores.utils import DistanceStrategy
 
@@ -42,15 +48,16 @@ class OracleRAGTool(BaseTool):
         )
         self.knowledge_base = knowledge_base
     
-    async def execute(self, query: str, top_k: int = 5) -> str:
+    async def execute(self, query: str, top_k: int = 5, context: ToolContext | None = None) -> dict:
         """Execute the RAG query
         
         Args:
             query: The question to ask
             top_k: Number of similar chunks to retrieve
+            context: Tool execution context
             
         Returns:
-            String with relevant context from documentation
+            Dict with result string
         """
         try:
             print(f"  → Searching vector store: {query[:60]}...")
@@ -59,7 +66,7 @@ class OracleRAGTool(BaseTool):
             result_chunks = self.knowledge_base.similarity_search(query, k=top_k)
             
             if not result_chunks:
-                return "No relevant documentation found for this query."
+                return {"result": "No relevant documentation found for this query."}
             
             # Format context from chunks
             context_parts = []
@@ -67,12 +74,15 @@ class OracleRAGTool(BaseTool):
                 context_parts.append(f"[{i}] {chunk.page_content}")
             
             context = "\n\n".join(context_parts)
-            return f"Found {len(result_chunks)} relevant documentation sections:\n\n{context}"
+            result_text = f"Found {len(result_chunks)} relevant documentation sections:\n\n{context}"
+            
+            print(f"  ✓ Found {len(result_chunks)} documentation chunks")
+            return {"result": result_text}
             
         except Exception as e:
             import traceback
             traceback.print_exc()
-            return f"Failed to query the knowledge base: {str(e)}"
+            return {"result": f"Failed to query the knowledge base: {str(e)}"}
 
 
 class OracleADKRAGAgent:
@@ -131,7 +141,7 @@ class OracleADKRAGAgent:
         # Initialize Vertex AI embeddings with retry logic
         print("  → Initializing Vertex AI embeddings...")
         try:
-            embeddings = GoogleGenerativeAIEmbeddings(model="text-embedding-004")
+            embeddings = VertexAIEmbeddings(model_name="text-embedding-004")
             
             # Connect to existing vector store
             print("  → Connecting to vector store RAG_TAB...")
@@ -177,32 +187,13 @@ class OracleADKRAGAgent:
         rag_tool = OracleRAGTool(self.knowledge_base)
         
         # Define agent instruction
-        instruction = """You are an expert Oracle Database AI assistant with access to comprehensive documentation.
+        instruction = """You are an expert Oracle Database AI assistant.
 
-**Your Capability:**
-Use the `query_oracle_database` tool to search Oracle Database documentation for information about:
-- Database features and functionality
-- SQL syntax, commands, and best practices
-- Vector search, spatial data, JSON capabilities
-- Performance optimization and configuration
-- New features in recent Oracle versions
-- Technical implementation details
+You have access to a tool called query_oracle_database that searches documentation.
 
-**When to Use the Tool:**
-Use `query_oracle_database` when users ask about:
-- Specific Oracle Database features ("What is vector search?")
-- How to do something in Oracle ("How do I create a JSON table?")
-- SQL syntax or commands
-- Database administration or configuration
-- Best practices and optimization
+IMPORTANT: When you need information, call the query_oracle_database function - DO NOT write code blocks showing the function call. The system will execute it automatically.
 
-**Response Style:**
-- Be concise but thorough
-- Cite specific features or capabilities when possible
-- If the documentation doesn't have the answer, say so clearly
-- Format technical content with examples when helpful
-
-Be helpful and technically accurate."""
+After the tool returns results, analyze them and provide a helpful answer to the user."""
         
         print("  → Creating ADK LlmAgent with RAG tool...")
         
@@ -217,7 +208,7 @@ Be helpful and technically accurate."""
             instruction=instruction,
             tools=[rag_tool],
             generate_content_config=GenerateContentConfig(
-                temperature=0.2,
+                temperature=0.1,  # Lower temperature for more consistent tool usage
                 max_output_tokens=2048,
             )
         )
@@ -262,15 +253,89 @@ Be helpful and technically accurate."""
                 new_message=content
             )
             
-            # Collect response parts
+            # Collect response parts and track tool calls
             response_parts = []
-            async for event in events:
-                if event.content.role == "model" and event.content.parts:
-                    for part in event.content.parts:
-                        if part.text:
-                            response_parts.append(part.text)
+            tool_calls_made = 0
             
-            return "\n".join(response_parts) if response_parts else "No response generated"
+            async for event in events:
+                # Check for tool calls and responses
+                if event.content.parts:
+                    for part in event.content.parts:
+                        # Tool call - model is requesting to execute a tool
+                        if hasattr(part, 'function_call') and part.function_call:
+                            tool_calls_made += 1
+                            print(f"  🔧 Tool call: {part.function_call.name}")
+                        # Tool response - result from tool execution
+                        elif hasattr(part, 'function_response') and part.function_response:
+                            result = part.function_response.response.get('result', '')
+                            if result:
+                                print(f"  ✓ Tool result received ({len(result)} chars)")
+                        # Text response from model - collect ALL text
+                        elif part.text and event.content.role == "model":
+                            # Check if model is outputting tool syntax instead of executing
+                            if '```tool_code' in part.text or 'query_oracle_database(' in part.text:
+                                print(f"  ⚠️  Model showing tool call instead of executing - extracting query...")
+                                # Extract the query from various formats
+                                import re
+                                # Try multiple patterns
+                                patterns = [
+                                    r'query_oracle_database\s*\(\s*query\s*=\s*["\']([^"\']+)["\']',  # query="..."
+                                    r'query_oracle_database\s*\(\s*["\']([^"\']+)["\']',  # query_oracle_database("...")
+                                    r'query_oracle_database\([^)]*["\']([^"\']+)["\']',  # Any format with quotes
+                                ]
+                                
+                                query = None
+                                for pattern in patterns:
+                                    match = re.search(pattern, part.text)
+                                    if match:
+                                        query = match.group(1)
+                                        break
+                                
+                                if query:
+                                    print(f"  → Executing manually: {query[:60]}...")
+                                    # Manually execute the tool
+                                    tool = OracleRAGTool(self.knowledge_base)
+                                    tool_result = await tool.execute(query=query)
+                                    
+                                    # Now feed the results back to the LLM for synthesis
+                                    print(f"  → Synthesizing response from {len(tool_result.get('result', ''))} chars...")
+                                    synthesis_prompt = f"""Based on these documentation sections, please answer the user's question: "{user_input}"
+
+Documentation sections:
+{tool_result.get('result', 'No results found')}
+
+Please provide a clear, concise answer based on this documentation."""
+                                    
+                                    # Make a follow-up call to synthesize the results
+                                    synthesis_content = types.Content(
+                                        role="user",
+                                        parts=[types.Part(text=synthesis_prompt)]
+                                    )
+                                    
+                                    synthesis_events = self.runner.run_async(
+                                        session_id=self.session.id,
+                                        user_id="user_123",
+                                        new_message=synthesis_content
+                                    )
+                                    
+                                    synthesis_parts = []
+                                    async for synth_event in synthesis_events:
+                                        if synth_event.content.parts:
+                                            for synth_part in synth_event.content.parts:
+                                                if synth_part.text and synth_event.content.role == "model":
+                                                    synthesis_parts.append(synth_part.text)
+                                    
+                                    synthesized_response = "\n".join(synthesis_parts) if synthesis_parts else tool_result.get('result', 'No results found')
+                                    return synthesized_response
+                                else:
+                                    # Log what we got for debugging
+                                    print(f"  � Debug: Could not extract query from: {part.text[:200]}")
+                                    response_parts.append("I attempted to search the documentation but encountered a formatting issue. Please rephrase your question.")
+                            else:
+                                response_parts.append(part.text)
+            
+            result = "\n".join(response_parts) if response_parts else "No response generated"
+            return result
             
         except Exception as e:
             import traceback

@@ -45,7 +45,7 @@ show_menu() {
     echo "     → Google's MCP Toolbox - requires AMD64 platform"
     echo ""
     echo -e "${GREEN}GenerativeModel + MCP:${NC}"
-    echo "  4) GenerativeModel with Oracle SQLcl MCP"
+    echo "  4) GenerativeModel with Oracle SQLcl MCP (Requires Java)"
     echo "     → oracle_ai_database_genai_mcp.py"
     echo "     → Direct Vertex AI GenerativeModel + manual MCP protocol"
     echo ""
@@ -88,8 +88,21 @@ run_adk_mcp_docker() {
 
 run_genai_mcp() {
     echo -e "${CYAN}Starting GenerativeModel + Oracle SQLcl MCP...${NC}"
-    echo "Note: Requires SQLcl with MCP support"
+    echo -e "${YELLOW}Note: Requires SQLcl with MCP support AND Java${NC}"
     echo ""
+    
+    # Check for Java
+    if ! command -v java &> /dev/null; then
+        echo -e "${RED}❌ Error: Java not found${NC}"
+        echo ""
+        echo "This option requires Java to run SQLcl."
+        echo "Please install Java or use option 2 (ADK Agent with Custom BaseTool) instead."
+        echo ""
+        echo -e "${YELLOW}Press Enter to return to menu...${NC}"
+        read
+        return
+    fi
+    
     python oracle_ai_database_genai_mcp.py
 }
 

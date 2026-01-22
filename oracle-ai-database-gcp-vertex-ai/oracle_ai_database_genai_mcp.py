@@ -49,29 +49,12 @@ class MCPClient:
                 env=env
             )
             
-            # Give SQLcl a moment to start
-            await asyncio.sleep(1)
-            
-            # Check if process died immediately
-            if self.process.returncode is not None:
-                stderr = await self.process.stderr.read()
-                error_msg = stderr.decode() if stderr else "Process exited immediately"
-                raise RuntimeError(f"SQLcl failed to start: {error_msg}")
-            
             # Initialize MCP session
             await self._initialize()
             
             print("  ✓ MCP server started and initialized")
             
         except Exception as e:
-            # Try to get stderr if available
-            if self.process and self.process.stderr:
-                try:
-                    stderr = await asyncio.wait_for(self.process.stderr.read(), timeout=1.0)
-                    if stderr:
-                        print(f"  SQLcl stderr: {stderr.decode()}")
-                except:
-                    pass
             raise RuntimeError(f"Failed to start MCP server: {e}")
     
     async def _initialize(self):
@@ -613,53 +596,7 @@ async def main():
     api_url = os.getenv("ORACLE_RAG_API_URL", "http://34.48.146.146:8501")
     project_id = os.getenv("GCP_PROJECT_ID", "adb-pm-prod")
     location = os.getenv("GCP_REGION", "us-central1")
-    
-    # Try to find SQLcl in common locations
-    sqlcl_paths = [
-        os.getenv("SQLCL_PATH"),
-        "/opt/sqlcl/bin/sql",
-        os.path.expanduser("~/.vscode/extensions/oracle.sql-developer-*/dbtools/sqlcl/bin/sql"),
-    ]
-    
-    sqlcl_path = None
-    for path in sqlcl_paths:
-        if path:
-            # Handle glob patterns
-            if '*' in path:
-                import glob
-                matches = glob.glob(path)
-                if matches:
-                    sqlcl_path = matches[0]
-                    break
-            elif os.path.exists(path):
-                sqlcl_path = path
-                break
-    
-    if not sqlcl_path:
-        print("❌ Error: SQLcl not found!")
-        print("\nThis script requires Oracle SQLcl with MCP support AND Java.")
-        print("\nPlease install SQLcl:")
-        print("  1. Download from: https://www.oracle.com/database/sqldeveloper/technologies/sqlcl/")
-        print("  2. Extract and set SQLCL_PATH environment variable:")
-        print("     export SQLCL_PATH=/path/to/sqlcl/bin/sql")
-        print("\nAlso ensure Java is installed and in PATH.")
-        print("\nAlternatively, use option 2 (ADK Agent with Custom BaseTool) which doesn't require SQLcl or Java.")
-        return
-    
-    # Check for Java
-    import shutil
-    if not shutil.which('java'):
-        print("❌ Error: Java not found!")
-        print("\nThis script requires Java to run SQLcl.")
-        print("\nPlease install Java (OpenJDK 11 or later recommended):")
-        print("  Ubuntu/Debian: sudo apt install openjdk-11-jre")
-        print("  RHEL/Fedora:   sudo dnf install java-11-openjdk")
-        print("  macOS:         brew install openjdk@11")
-        print("\nAlternatively, use option 2 (ADK Agent with Custom BaseTool) which doesn't require Java.")
-        return
-    
-    print(f"✓ Found SQLcl: {sqlcl_path}\n")
-    
+    sqlcl_path = os.getenv("SQLCL_PATH", "/opt/sqlcl/bin/sql")
     wallet_path = os.getenv("TNS_ADMIN", os.path.expanduser("~/wallet"))
     
     print("Starting GenAI + MCP Agent...\n")

@@ -26,9 +26,9 @@ import langchain
 def chunks_to_docs_wrapper(row: dict) -> Document:
     """
     Converts a row from a DataFrame into a Document object suitable for ingestion into Oracle Vector Store.
-    - row (dict): A dictionary representing a row of data with keys for 'id', 'link', and 'text'.
+    - row (dict): A dictionary representing a row of data with keys for 'id', 'link', 'source', and 'text'.
     """
-    metadata = {'id': str(row['id']), 'link': row['link']}
+    metadata = {'id': str(row['id']), 'link': row['link'], 'source': row.get('source', 'Unknown')}
     return Document(page_content=row['text'], metadata=metadata)
 
 def main():
@@ -96,8 +96,9 @@ def main():
       text_splitter = CharacterTextSplitter(separator="\n",chunk_size=1000,chunk_overlap=200,length_function=len)
       chunks = text_splitter.split_text(text)
 
-      # Create documents using wrapper
-      docs = [chunks_to_docs_wrapper({'id': page_num, 'link': f'Page {page_num}', 'text': text}) for page_num, text in enumerate(chunks)]
+      # Create documents using wrapper - include PDF filename in metadata
+      pdf_name = pdf.name
+      docs = [chunks_to_docs_wrapper({'id': page_num, 'link': f'Page {page_num}', 'source': pdf_name, 'text': text}) for page_num, text in enumerate(chunks)]
 
       s1time = time.time()
 
@@ -151,6 +152,15 @@ def main():
           # Display response
           st.write("### Answer:")
           st.write(response)
+          
+          # Display sources
+          st.write("---")
+          st.write("**Sources:**")
+          for i, chunk in enumerate(result_chunks, 1):
+              doc_name = chunk.metadata.get('source', 'Unknown')
+              page_ref = chunk.metadata.get('link', 'Unknown')
+              preview = chunk.page_content[:80].replace('\n', ' ')
+              st.caption(f"{i}. {doc_name} ({page_ref}) - _{preview}_...")
           
           # Display timing info
           st.write("---")

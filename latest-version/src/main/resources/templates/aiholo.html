@@ -106,8 +106,8 @@
 <script th:inline="javascript">
     var languageCodeSTT = /*[[${languageCode} ?: 'pt-BR']]*/ 'pt-BR';
     var voiceName = /*[[${voiceName} ?: 'pt-BR-Wavenet-D']]*/ 'pt-BR-Wavenet-D';
-    // Default TTS mode - GCP is the primary, most reliable option
-    var ttsMode = 'GCP';
+    // TTS mode from backend configuration (from .env TTS_ENGINE setting)
+    var ttsMode = /*[[${ttsMode} ?: 'COQUI_QUALITY']]*/ 'COQUI_QUALITY';
     var llmModel = 'gpt-4'; // Default LLM model
     var audio2FaceEnabled = /*[[${audio2FaceEnabled} ?: false]]*/ false;
     var audioDelayMs = /*[[${audioDelayMs} ?: 500]]*/ 500;
@@ -485,7 +485,39 @@
     }
 
     document.addEventListener("DOMContentLoaded", function () {
-        console.log("Speech Recognition Language Code:", languageCodeSTT);
+        console.log("🚀 Page loaded - Speech Recognition Language Code:", languageCodeSTT);
+        
+        // Test microphone access early
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            console.log("🎤 Testing microphone access...");
+            
+            // List available audio input devices
+            navigator.mediaDevices.enumerateDevices()
+                .then(devices => {
+                    const audioInputs = devices.filter(device => device.kind === 'audioinput');
+                    console.log("🎤 Available microphones:", audioInputs.length);
+                    audioInputs.forEach((device, index) => {
+                        console.log(`  ${index + 1}. ${device.label || 'Microphone ' + (index + 1)} (${device.deviceId})`);
+                    });
+                })
+                .catch(err => console.error("Error listing devices:", err));
+            
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    console.log("✅ Microphone access granted!");
+                    const audioTrack = stream.getAudioTracks()[0];
+                    console.log("🎤 Using microphone:", audioTrack.label);
+                    console.log("🎤 Microphone settings:", audioTrack.getSettings());
+                    
+                    // Stop the test stream immediately
+                    stream.getTracks().forEach(track => track.stop());
+                })
+                .catch(err => {
+                    console.error("❌ Microphone access denied or error:", err);
+                    alert("🎤 Microphone access required! Please allow microphone access when prompted.\n\nError: " + err.message);
+                });
+        }
+        
         let recognition;
         let isListening = false;
         let transcriptBuffer = "";
@@ -507,32 +539,35 @@
             });
         }
 
+        // Check if browser supports speech recognition
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            console.log("✅ Browser supports Speech Recognition");
             recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
             recognition.continuous = true;
             recognition.interimResults = true;
             recognition.lang = languageCodeSTT;
-
-            recognition.onstart = () => {
-                console.log("🎤 Speech recognition started with language:", recognition.lang);
-                document.getElementById("startBtn").disabled = true;
-                document.getElementById("stopSendBtn").disabled = false;
-                transcriptBuffer = "";
-                isListening = true;
-            };
-
-            recognition.onend = () => {
-                console.log("🛑 Speech recognition stopped.");
-                document.getElementById("startBtn").disabled = false;
-                document.getElementById("stopSendBtn").disabled = true;
-                isListening = false;
-            };
+            console.log("🔧 Recognition configured with language:", recognition.lang);
 
             recognition.onerror = (event) => {
-                console.error("⚠️ Error:", event.error);
+                console.error("❌ Speech Recognition Error:", event.error, "- Message:", event.message);
+                if (event.error === 'not-allowed') {
+                    alert("🎤 Microphone access denied! Please allow microphone access in your browser settings.");
+                } else if (event.error === 'no-speech') {
+                    console.warn("⚠️ No speech detected - make sure your microphone is working and try speaking louder");
+                    // Don't stop on no-speech if we're still holding the button
+                    if (isListening) {
+                        console.log("🔄 Continuing to listen despite no-speech error...");
+                        event.preventDefault(); // Try to prevent automatic stop
+                    }
+                } else if (event.error === 'audio-capture') {
+                    alert("❌ Microphone error! Please check:\n1. Microphone is plugged in\n2. Correct microphone selected in browser\n3. Microphone permissions granted");
+                } else if (event.error === 'aborted') {
+                    console.log("ℹ️ Recognition aborted (normal when releasing mic button)");
+                }
             };
 
             recognition.onresult = (event) => {
+                console.log("🎤 Recognition result event fired - resultIndex:", event.resultIndex, "results length:", event.results.length);
                 let interimTranscript = "";
                 for (let i = event.resultIndex; i < event.results.length; i++) {
                     if (event.results[i].isFinal) {
@@ -541,21 +576,24 @@
                         interimTranscript += event.results[i][0].transcript + " ";
                     }
                 }
-                console.log("Final Transcript Buffer:", transcriptBuffer.trim());
-                console.log("Interim Transcript:", interimTranscript.trim());
-                document.getElementById("transcription").value = transcriptBuffer.trim() + " " + interimTranscript.trim();
+                const fullTranscript = (transcriptBuffer.trim() + " " + interimTranscript.trim()).trim();
+                console.log("📝 Transcription update - Final:", transcriptBuffer.trim(), "| Interim:", interimTranscript.trim());
+                document.getElementById("transcription").value = fullTranscript;
             };
-        } else if (recognition.lang !== "he-IL" && languageCodeSTT === "he-IL") {
-            alert("⚠️ Speech Recognition for specified language is not supported in this browser.");
+            console.log("✅ Speech Recognition handlers configured successfully");
         } else {
-            alert("⚠️ Browser does not support Speech Recognition.");
+            console.error("❌ Browser does not support Speech Recognition");
+            alert("⚠️ Browser does not support Speech Recognition. Please use Chrome, Edge, or Safari.");
         }
 
         // Extract send logic to a function
         async function sendTranscript() {
             // Get the text from the textarea (allows user edits)
             const transcriptionText = document.getElementById("transcription").value.trim();
+            console.log("📤 sendTranscript called - transcriptionText:", transcriptionText, "transcriptBuffer:", transcriptBuffer);
+            
             if (!transcriptionText) {
+                console.warn("⚠️ No text captured in textarea");
                 alert("⚠️ No text captured. Try sending again.");
                 return;
             }
@@ -687,21 +725,39 @@
 
         // Mouse down/up logic for press-to-talk
         singleBtnMode.addEventListener("mousedown", () => {
+            console.log("🔴 Microphone button pressed - attempting to start recognition");
+            console.log("Current state - isListening:", isListening, "recognition exists:", !!recognition);
             if (!isListening && recognition) {
-                recognition.start();
-                singleBtnIcon.src = stopIcon;
-                singleBtnMode.disabled = false;
-                listeningSound.currentTime = 0;
-                listeningSound.play();
+                try {
+                    recognition.start();
+                    console.log("✅ Recognition.start() called successfully");
+                    singleBtnIcon.src = stopIcon;
+                    singleBtnMode.disabled = false;
+                    listeningSound.currentTime = 0;
+                    listeningSound.play();
+                } catch (e) {
+                    console.error("❌ Error starting recognition:", e);
+                }
+            } else {
+                console.warn("⚠️ Cannot start - isListening:", isListening, "recognition:", !!recognition);
             }
         });
 
         singleBtnMode.addEventListener("mouseup", () => {
+            console.log("🟢 Microphone button released - attempting to stop recognition");
+            console.log("Current state - isListening:", isListening, "transcriptBuffer:", transcriptBuffer);
             if (isListening && recognition) {
-                recognition.stop();
-                singleBtnMode.disabled = true; // Prevent double triggers
-                sendingSound.currentTime = 0;
-                sendingSound.play();
+                try {
+                    recognition.stop();
+                    console.log("✅ Recognition.stop() called successfully");
+                    singleBtnMode.disabled = true; // Prevent double triggers
+                    sendingSound.currentTime = 0;
+                    sendingSound.play();
+                } catch (e) {
+                    console.error("❌ Error stopping recognition:", e);
+                }
+            } else {
+                console.warn("⚠️ Cannot stop - isListening:", isListening);
             }
         });
 
@@ -729,14 +785,27 @@
 
         if (recognition) {
             recognition.onstart = () => {
+                console.log("🎤 Speech recognition started with language:", recognition.lang);
                 singleBtnIcon.src = stopIcon;
+                transcriptBuffer = ""; // Clear buffer when starting
                 isListening = true;
                 singleBtnMode.disabled = false;
+                // Visual feedback in transcription area
+                const transcriptionBox = document.getElementById("transcription");
+                transcriptionBox.placeholder = "🎤 Listening... Speak now!";
+                transcriptionBox.style.borderColor = "#00FF00";
+                transcriptionBox.style.borderWidth = "3px";
             };
             recognition.onend = async () => {
+                console.log("🛑 Speech recognition stopped.");
                 singleBtnIcon.src = micIcon;
                 isListening = false;
                 singleBtnMode.disabled = false;
+                // Reset visual feedback
+                const transcriptionBox = document.getElementById("transcription");
+                transcriptionBox.placeholder = "Your speech will appear here. You can edit it before sending.";
+                transcriptionBox.style.borderColor = "#ddd";
+                transcriptionBox.style.borderWidth = "1px";
                 await sendTranscript();
                 transcriptBuffer = "";
                 document.getElementById("transcription").value = "";

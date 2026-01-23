@@ -11,8 +11,7 @@ public class IndexController {
     
     @GetMapping("/")
     public String index(Model model) {
-        String hostUrl = AIHOLO_HOST_URL != null ? AIHOLO_HOST_URL : "http://localhost:8080";
-        model.addAttribute("aiholoHostUrl", hostUrl);
-        return "index";
+        // Redirect directly to /aiholo instead of using a template
+        return "redirect:/aiholo";
     }
 }

@@ -189,7 +189,7 @@ public class OracleDocAgent implements Agent {
                 """
                 SELECT id, name, chunk_index, text, 
                        ROUND(1 - VECTOR_DISTANCE(embedding, VECTOR_EMBEDDING(? USING ? as data), COSINE) / 2, 6) as similarity_score
-                FROM documents
+                FROM ADMIN.documents
                 ORDER BY similarity_score DESC
                 FETCH FIRST ? ROWS ONLY
                 """,
@@ -197,7 +197,7 @@ public class OracleDocAgent implements Agent {
                 String.format("""
                 SELECT id, name, chunk_index, text, 
                        ROUND(1 - VECTOR_DISTANCE(embedding, VECTOR_EMBEDDING(%s USING ? as data), COSINE) / 2, 6) as similarity_score
-                FROM documents
+                FROM ADMIN.documents
                 ORDER BY similarity_score DESC
                 FETCH FIRST ? ROWS ONLY
                 """, ORACLE_MODEL_NAME)
@@ -340,7 +340,7 @@ public class OracleDocAgent implements Agent {
         String textSql = """
             SELECT id, name, chunk_index, text, 
                    0.8 as similarity_score
-            FROM documents
+            FROM ADMIN.documents
             WHERE UPPER(text) LIKE UPPER(?) OR UPPER(name) LIKE UPPER(?)
             ORDER BY 
                 CASE 
@@ -436,7 +436,7 @@ public class OracleDocAgent implements Agent {
      */
     private void checkDocumentCount() {
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement("SELECT COUNT(*) as doc_count FROM documents")) {
+             PreparedStatement pstmt = conn.prepareStatement("SELECT COUNT(*) as doc_count FROM ADMIN.documents")) {
             
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {

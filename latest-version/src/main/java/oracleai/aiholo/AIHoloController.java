@@ -210,6 +210,33 @@ public class AIHoloController {
         }
     }
     
+    /**
+     * Gets the TTS mode string for frontend based on Configuration settings.
+     * Maps TTS_ENGINE + TTS_QUALITY to frontend TTS mode values.
+     */
+    private String getTtsModeString() {
+        switch (ACTIVE_TTS_ENGINE) {
+            case GCP:
+                return "GCP";
+            case OCI:
+                return "OCI";
+            case COQUI:
+                // Map quality to frontend options
+                String quality = Configuration.getTtsQuality();
+                if ("FAST".equalsIgnoreCase(quality)) {
+                    return "COQUI_FAST";
+                } else if ("BALANCED".equalsIgnoreCase(quality)) {
+                    return "COQUI_BALANCED";
+                } else if ("QUALITY".equalsIgnoreCase(quality)) {
+                    return "COQUI_QUALITY";
+                } else {
+                    return "COQUI_BALANCED"; // default
+                }
+            default:
+                return "GCP";
+        }
+    }
+    
     private static int currentAnswerIntro = 0;
     private static String aiholo_prompt_additions = "";
 
@@ -370,6 +397,10 @@ public class AIHoloController {
         model.addAttribute("enableDualAudioOutput", Configuration.isEnableDualAudioOutput());
         model.addAttribute("audioDeviceA", Configuration.getAudioDeviceA());
         model.addAttribute("audioDeviceB", Configuration.getAudioDeviceB());
+        
+        // Add TTS mode from Configuration (maps TTS_ENGINE + TTS_QUALITY from .env)
+        String ttsMode = getTtsModeString();
+        model.addAttribute("ttsMode", ttsMode);
         
         return "aiholo";
     }

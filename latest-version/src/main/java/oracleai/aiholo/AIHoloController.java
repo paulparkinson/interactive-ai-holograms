@@ -37,7 +37,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.annotation.PostConstruct;
 import javax.sql.*;
-
+import java.nio.file.Path;
 import java.sql.*;
 import java.util.HashMap;
 import java.util.Map;
@@ -47,7 +47,6 @@ import java.util.Map;
 import org.springframework.http.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Paths;
 import oracleai.aiholo.agents.*;
 import java.util.*;
 
@@ -244,7 +243,7 @@ public class AIHoloController {
         // Check for aiholo_prompt_additions.txt in AUDIO_DIR_PATH at startup
         if (AUDIO_DIR_PATH != null) {
             try {
-                java.nio.file.Path additionsPath = Paths.get(AUDIO_DIR_PATH, "aiholo_prompt_additions.txt");
+                java.nio.file.Path additionsPath = Path.of(AUDIO_DIR_PATH, "aiholo_prompt_additions.txt");
                 if (Files.exists(additionsPath)) {
                     aiholo_prompt_additions = new String(Files.readAllBytes(additionsPath), StandardCharsets.UTF_8).trim();
                     System.out.println("Loaded aiholo_prompt_additions: " + aiholo_prompt_additions);

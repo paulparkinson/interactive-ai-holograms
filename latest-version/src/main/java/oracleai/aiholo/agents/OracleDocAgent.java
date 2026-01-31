@@ -111,7 +111,7 @@ public class OracleDocAgent implements Agent {
                     relevantDocs.add(chunk);
                 } else {
                     System.out.println("Filtered out chunk from " + chunk.name + 
-                                     " (similarity: " + String.format("%.4f", similarity) + 
+                                     " (similarity: " + "%.4f".formatted(similarity) + 
                                      " < threshold: " + SIMILARITY_THRESHOLD + ")");
                 }
             }
@@ -193,14 +193,14 @@ public class OracleDocAgent implements Agent {
                 ORDER BY similarity_score DESC
                 FETCH FIRST ? ROWS ONLY
                 """,
-                // Variant 2: Model name directly in SQL (not parameterized)
-                String.format("""
+                    // Variant 2: Model name directly in SQL (not parameterized)
+                    """
                 SELECT id, name, chunk_index, text, 
                        ROUND(1 - VECTOR_DISTANCE(embedding, VECTOR_EMBEDDING(%s USING ? as data), COSINE) / 2, 6) as similarity_score
                 FROM ADMIN.documents
                 ORDER BY similarity_score DESC
                 FETCH FIRST ? ROWS ONLY
-                """, ORACLE_MODEL_NAME)
+                """.formatted(ORACLE_MODEL_NAME)
             };
             
             boolean vectorSearchSuccessful = false;
@@ -233,8 +233,8 @@ public class OracleDocAgent implements Agent {
                                 rs.getDouble("similarity_score")
                             );
                             results.add(chunk);
-                            System.out.println("Found vector chunk (variant " + (i+1) + "): " + chunk.name + " (similarity: " + 
-                                             String.format("%.4f", chunk.distance) + ")");
+                            System.out.println("Found vector chunk (variant " + (i+1) + "): " + chunk.name + " (similarity: " +
+                                    "%.4f".formatted(chunk.distance) + ")");
                         }
                     }
                     
@@ -501,15 +501,18 @@ public class OracleDocAgent implements Agent {
      * Build RAG prompt combining question and context
      */
     private String buildRAGPrompt(String question, String context) {
-        return String.format(
-            "Based on the following documents, please answer the question.\n\n" +
-            "%s\n" +
-            "Question: %s\n\n" +
-            "Please provide a concise answer (50 words or less) based solely on the information " +
-            "in the documents above. If the documents don't contain relevant information, " +
-            "say so clearly.",
-            context,
-            question
+        return (
+                """
+                Based on the following documents, please answer the question.
+                
+                %s
+                Question: %s
+                
+                Please provide a concise answer (50 words or less) based solely on the information \
+                in the documents above. If the documents don't contain relevant information, \
+                say so clearly.""").formatted(
+                context,
+                question
         );
     }
     
@@ -521,7 +524,7 @@ public class OracleDocAgent implements Agent {
             return "Unknown";
         }
         // Since chunks are already sorted by distance (closest first), return the first one's name
-        return chunks.get(0).name;
+        return chunks.getFirst().name;
     }
     
     /**

@@ -8,7 +8,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Map;
 import java.util.Optional;
 
@@ -53,7 +52,7 @@ public class AudioController {
         
         try {
             // Create temporary directory if it doesn't exist
-            Path tempDir = Paths.get(System.getProperty("java.io.tmpdir"), "audio-uploads");
+            Path tempDir = Path.of(System.getProperty("java.io.tmpdir"), "audio-uploads");
             Files.createDirectories(tempDir);
             
             // Save uploaded file to temporary location

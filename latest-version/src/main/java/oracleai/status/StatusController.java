@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 
 @RestController
 @RequestMapping("/status/aiholo")
@@ -27,7 +27,7 @@ public class StatusController {
         // If STATUS_FILE_PATH is set, try to read from file
         if (STATUS_FILE_PATH != null) {
             try {
-                String fileContent = new String(Files.readAllBytes(Paths.get(STATUS_FILE_PATH)));
+                String fileContent = new String(Files.readAllBytes(Path.of(STATUS_FILE_PATH)));
                 JSONObject json = new JSONObject(fileContent);
                 statusValue = json.getString("data");
                 System.out.println("Read status from file: " + statusValue);

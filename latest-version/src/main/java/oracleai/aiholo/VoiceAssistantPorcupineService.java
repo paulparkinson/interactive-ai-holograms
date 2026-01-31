@@ -73,8 +73,8 @@ public class VoiceAssistantPorcupineService {
         for (int i = 0; i < keywordPaths.length; i++) {
             File keywordFile = new File(keywordPaths[i]);
             if (!keywordFile.exists()) {
-                throw new IllegalArgumentException(String.format("Keyword file at '%s' " +
-                        "does not exist", keywordPaths[i]));
+                throw new IllegalArgumentException(("Keyword file at '%s' " +
+                        "does not exist").formatted(keywordPaths[i]));
             }
             keywords[i] = keywordFile.getName().split("_")[0];
         }

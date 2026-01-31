@@ -1,10 +1,10 @@
 package oracleai.aiholo;
 
-import java.nio.file.Paths;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.nio.file.Path;
 
 import com.google.cloud.texttospeech.v1.*;
 import com.google.protobuf.ByteString;
@@ -62,8 +62,8 @@ public class TTSLocal {
                     .build();
             SynthesizeSpeechResponse response = textToSpeechClient.synthesizeSpeech(input, voice, audioConfig);
             ByteString audioContents = response.getAudioContent();
-            String fullPath = Paths.get(AIHoloController.AUDIO_DIR_PATH, fileName).toString();
-            java.nio.file.Path audioPath = Paths.get(fullPath);
+            String fullPath = Path.of(AIHoloController.AUDIO_DIR_PATH, fileName).toString();
+            java.nio.file.Path audioPath = Path.of(fullPath);
 
             try {
                 java.nio.file.Files.deleteIfExists(audioPath); // delete old file
@@ -97,11 +97,11 @@ public class TTSLocal {
         }
 
         System.out.println("DEBUG: Using model path: " + modelPath);
-        System.out.println("DEBUG: Model file exists: " + java.nio.file.Files.exists(Paths.get(modelPath)));
+        System.out.println("DEBUG: Model file exists: " + java.nio.file.Files.exists(Path.of(modelPath)));
         System.out.println("Using Piper TTS - model:" + modelPath + " text:" + text);
 
-        String fullPath = Paths.get(AIHoloController.AUDIO_DIR_PATH, fileName).toString();
-        java.nio.file.Path audioPath = Paths.get(fullPath);
+        String fullPath = Path.of(AIHoloController.AUDIO_DIR_PATH, fileName).toString();
+        java.nio.file.Path audioPath = Path.of(fullPath);
 
         // Delete existing file
         try {

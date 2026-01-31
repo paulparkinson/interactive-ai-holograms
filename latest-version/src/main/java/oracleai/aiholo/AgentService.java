@@ -142,7 +142,7 @@ public class AgentService {
         
         // Add word limit instruction if specified
         if (maxWords != null && maxWords > 0) {
-            cleanedQuestion += String.format(". Respond in %d words or less.", maxWords);
+            cleanedQuestion += ". Respond in %d words or less.".formatted(maxWords);
         }
         
         System.out.println("[AgentService] Using agent: " + matchingAgent.getName());

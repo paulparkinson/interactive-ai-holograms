@@ -6,7 +6,6 @@ import org.springframework.web.client.RestTemplate;
 import javax.sound.sampled.*;
 import java.io.*;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -108,7 +107,7 @@ public class TTSCoquiEnhanced {
      */
     public static void generateCoquiTTS(String fileName, String text, TTSQuality quality,
                                         String languageCode, String voiceName) throws Exception {
-        String fullPath = Paths.get(AIHoloController.AUDIO_DIR_PATH, fileName).toString();
+        String fullPath = Path.of(AIHoloController.AUDIO_DIR_PATH, fileName).toString();
         String safeLanguageCode = (languageCode == null || languageCode.isBlank()) ? "en-US" : languageCode;
         String safeVoiceName = voiceName != null ? voiceName : "";
         
@@ -250,7 +249,7 @@ public class TTSCoquiEnhanced {
      * Fallback Python TTS (pyttsx3 or gTTS)
      */
     private static void generatePythonTTS(String fileName, String text, String engine) throws Exception {
-        String fullPath = Paths.get(AIHoloController.AUDIO_DIR_PATH, fileName).toString();
+        String fullPath = Path.of(AIHoloController.AUDIO_DIR_PATH, fileName).toString();
         
         ProcessBuilder pb = new ProcessBuilder(
             "cmd", "/c",
@@ -329,7 +328,7 @@ public class TTSCoquiEnhanced {
                     return;
                 }
                 
-                Path audioPath = Paths.get(AIHoloController.AUDIO_DIR_PATH, filename);
+                Path audioPath = Path.of(AIHoloController.AUDIO_DIR_PATH, filename);
                 String fullPath = audioPath.toString();
                 File audioFile = audioPath.toFile();
                 
@@ -424,7 +423,7 @@ public class TTSCoquiEnhanced {
     public static void playAudioFileToDevice(String filename, String deviceName) {
         new Thread(() -> {
             try {
-                String fullPath = java.nio.file.Paths.get(AIHoloController.AUDIO_DIR_PATH, filename).toString();
+                String fullPath = Path.of(AIHoloController.AUDIO_DIR_PATH, filename).toString();
                 java.io.File audioFile = new java.io.File(fullPath);
                 if (!audioFile.exists()) { System.err.println("Audio file not found: " + fullPath); return; }
                 System.out.println("Playing audio to device containing '" + deviceName + "': " + fullPath);

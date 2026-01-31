@@ -10,13 +10,13 @@ import org.springframework.web.client.RestTemplate;
 
 import java.io.FileOutputStream;
 import java.io.OutputStream;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.io.File;
 import javax.sound.sampled.*;
-import java.nio.file.Paths;
 
 public class TTSAndAudio2Face {
     private static final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -132,7 +132,7 @@ public class TTSAndAudio2Face {
                 }
                 
                 // Use Paths.get() for proper cross-platform path handling
-                java.nio.file.Path audioPath = Paths.get(AIHoloController.AUDIO_DIR_PATH, filename);
+                java.nio.file.Path audioPath = Path.of(AIHoloController.AUDIO_DIR_PATH, filename);
                 String fullPath = audioPath.toString();
                 File audioFile = audioPath.toFile();
                 
@@ -209,7 +209,7 @@ public class TTSAndAudio2Face {
     public static void playAudioFileToDevice(String filename, String deviceName) {
         new Thread(() -> {
             try {
-                String fullPath = Paths.get(AIHoloController.AUDIO_DIR_PATH, filename).toString();
+                String fullPath = Path.of(AIHoloController.AUDIO_DIR_PATH, filename).toString();
                 File audioFile = new File(fullPath);
                 
                 if (!audioFile.exists()) {

@@ -1,17 +1,24 @@
 package oracleai.aiholo.agents;
 
+import oracleai.aiholo.AgenticTrainingSetService;
 import oracleai.aiholo.ChatGPTService;
 
 /**
  * Default fallback agent that provides helpful responses using ChatGPT when no other agents match.
- * Uses OpenAI's ChatGPT API to provide intelligent responses for general questions.
+ * Can be configured to use Oracle + DoN Agentic AI Training Set as authoritative source.
  */
 public class DefaultFallbackAgent implements Agent {
     
     private final ChatGPTService chatGPTService;
+    private final AgenticTrainingSetService trainingSetService;
     
     public DefaultFallbackAgent() {
+        this(null);
+    }
+    
+    public DefaultFallbackAgent(AgenticTrainingSetService trainingSetService) {
         this.chatGPTService = new ChatGPTService();
+        this.trainingSetService = trainingSetService;
     }
     
     @Override
@@ -41,8 +48,14 @@ public class DefaultFallbackAgent implements Agent {
     public String processQuestion(String question) {
         System.out.println("Default ChatGPT Agent processing: " + question);
         
-        // Add instruction to keep responses concise
-        String enhancedQuestion = question + " (Please respond in 25 words or less)";
+        // Use training set if configured, otherwise use default prompt
+        String enhancedQuestion;
+        if (trainingSetService != null && trainingSetService.isConfigured()) {
+            enhancedQuestion = trainingSetService.buildEnhancedPrompt(question) + "\n\n(Please respond in 25 words or less)";
+            System.out.println("Default ChatGPT Agent using training set context");
+        } else {
+            enhancedQuestion = question + " (Please respond in 25 words or less)";
+        }
         
         // Use ChatGPT for intelligent responses (use default model)
         String response = chatGPTService.queryChatGPT(enhancedQuestion, "gpt-4");

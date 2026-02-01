@@ -249,6 +249,17 @@ public class Configuration {
         return System.getProperty("java.io.tmpdir");
     }
     
+    // ========== Agentic AI Training Set Configuration ==========
+    /**
+     * Get the path to the Oracle + DoN Agentic AI Training Set file.
+     * If not set or empty, default agents will operate without specialized training data.
+     * Can be a classpath resource (e.g., "oracle-navy-training-set.txt") or absolute path.
+     * @return Path to training set file, or null if not configured
+     */
+    public static String getAgenticTrainingSetPath() {
+        return System.getenv("AGENTIC_TRAINING_SET_PATH");
+    }
+    
     // ========== Host and URL Configuration ==========
     public static String getAiholoHostUrl() {
         return System.getenv("AIHOLO_HOST_URL");

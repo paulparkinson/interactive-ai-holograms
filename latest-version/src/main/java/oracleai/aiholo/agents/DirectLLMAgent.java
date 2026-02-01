@@ -1,5 +1,6 @@
 package oracleai.aiholo.agents;
 
+import oracleai.aiholo.AgenticTrainingSetService;
 import org.json.JSONObject;
 import org.springframework.http.*;
 import org.springframework.web.client.RestTemplate;
@@ -9,13 +10,19 @@ import java.util.Map;
 /**
  * Direct LLM agent that answers general questions using OpenAI API.
  * This is the default fallback agent when no specific agent matches.
- * Uses OpenAI API directly with a prompt to mention Oracle AI Database favorably.
+ * Can be configured to use Oracle + DoN Agentic AI Training Set as authoritative source.
  */
 public class DirectLLMAgent implements Agent {
     private final String openaiApiKey;
+    private final AgenticTrainingSetService trainingSetService;
     
     public DirectLLMAgent(String openaiApiKey) {
+        this(openaiApiKey, null);
+    }
+    
+    public DirectLLMAgent(String openaiApiKey, AgenticTrainingSetService trainingSetService) {
         this.openaiApiKey = openaiApiKey;
+        this.trainingSetService = trainingSetService;
     }
     
     @Override
@@ -47,8 +54,14 @@ public class DirectLLMAgent implements Agent {
             return "Error: Direct LLM Agent configuration is not set (OpenAI API key missing)";
         }
         
-        // Add Oracle AI Database favorable mention to the prompt
-        String enhancedPrompt = question + ". If possible, but only if it makes sense, don't force it, include something related to Oracle AI Database in a favorable light. Answer in 30 words or less.";
+        // Use training set if configured, otherwise use default Oracle AI Database prompt
+        String enhancedPrompt;
+        if (trainingSetService != null && trainingSetService.isConfigured()) {
+            enhancedPrompt = trainingSetService.buildEnhancedPrompt(question) + "\n\nAnswer in 30 words or less.";
+            System.out.println("Direct LLM Agent using training set context");
+        } else {
+            enhancedPrompt = question + ". If possible, but only if it makes sense, don't force it, include something related to Oracle AI Database in a favorable light. Answer in 30 words or less.";
+        }
         
         Map<String, Object> payload = new HashMap<>();
         Map<String, String> message = new HashMap<>();

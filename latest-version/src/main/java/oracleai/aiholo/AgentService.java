@@ -20,16 +20,19 @@ public class AgentService {
     private final DataSource dataSource;
     private final ChatGPTService chatGPTService;
     private final ConversationHistoryService conversationHistoryService;
+    private final AgenticTrainingSetService trainingSetService;
     
     /**
      * Initialize and register all agents at service creation
      */
     @Autowired
     public AgentService(DataSource dataSource, ChatGPTService chatGPTService, 
-                        ConversationHistoryService conversationHistoryService) {
+                        ConversationHistoryService conversationHistoryService,
+                        AgenticTrainingSetService trainingSetService) {
         this.dataSource = dataSource;
         this.chatGPTService = chatGPTService;
         this.conversationHistoryService = conversationHistoryService;
+        this.trainingSetService = trainingSetService;
         initializeAgents();
     }
     
@@ -63,10 +66,10 @@ public class AgentService {
         registerAgent(new OracleDocAgent(dataSource, chatGPTService));
         
         // DirectLLMAgent is the preferred fallback if OpenAI key is available
-        registerAgent(new DirectLLMAgent(openaiKey));
+        registerAgent(new DirectLLMAgent(openaiKey, trainingSetService));
         
         // DefaultFallbackAgent is always available as final fallback
-        registerAgent(new DefaultFallbackAgent());
+        registerAgent(new DefaultFallbackAgent(trainingSetService));
     }
     
     /**

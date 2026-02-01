@@ -80,9 +80,17 @@ if (-not $env:JAVA_HOME) {
         }
     }
     
-    # Still not found? Try common installation paths
+    # Still not found? Try common installation paths (prioritize Java 21)
     if (-not $env:JAVA_HOME) {
         $commonPaths = @(
+            "C:\Users\*\.jdk\jdk-21*",
+            "C:\Program Files\Java\jdk-21*",
+            "C:\Program Files\Eclipse Adoptium\jdk-21*",
+            "C:\Program Files\Microsoft\jdk-21*",
+            "C:\Program Files\Amazon Corretto\jdk21*",
+            "C:\Program Files\BellSoft\*jdk-21*",
+            "C:\Program Files\GraalVM\*java21*",
+            "C:\Users\*\.jdk\jdk*",
             "C:\Program Files\GraalVM\*",
             "C:\Program Files\Java\jdk*",
             "C:\Program Files\Eclipse Adoptium\jdk*",
@@ -107,7 +115,7 @@ if (-not $env:JAVA_HOME) {
     if (-not $env:JAVA_HOME) {
         Write-Host "ERROR: Cannot find Java installation!" -ForegroundColor Red
         Write-Host ""
-        Write-Host "Please install Java 17 or later, or set JAVA_HOME manually:" -ForegroundColor Yellow
+        Write-Host "Please install Java 21 or later, or set JAVA_HOME manually:" -ForegroundColor Yellow
         Write-Host "  Download: https://adoptium.net/" -ForegroundColor Cyan
         Write-Host "  Or set: " -NoNewline -ForegroundColor Yellow
         Write-Host "`$env:JAVA_HOME = 'C:\Path\To\Java\jdk'" -ForegroundColor White

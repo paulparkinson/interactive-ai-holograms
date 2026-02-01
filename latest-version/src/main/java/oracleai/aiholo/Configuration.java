@@ -66,6 +66,46 @@ public class Configuration {
         return !"false".equalsIgnoreCase(System.getenv("ENABLE_LANGUAGE_DETECTION"));
     }
     
+    /**
+     * Get the voice gender to use for TTS (MALE or FEMALE)
+     * Checks runtime override first, then falls back to environment variable
+     * @return "MALE" or "FEMALE", defaults to "FEMALE"
+     */
+    public static String getVoiceGender() {
+        // Check if there's a runtime override (set via REST API)
+        String runtimeGender = getRuntimeVoiceGender();
+        if (runtimeGender != null) {
+            return runtimeGender;
+        }
+        
+        // Fall back to environment variable
+        String gender = System.getenv("VOICE_GENDER");
+        if (gender != null) {
+            gender = gender.toUpperCase();
+            if ("MALE".equals(gender) || "FEMALE".equals(gender)) {
+                return gender;
+            }
+        }
+        return "FEMALE"; // Default to female voice
+    }
+    
+    /**
+     * Get runtime voice gender override (set via REST API)
+     * This is accessed via reflection to avoid circular dependency
+     * @return runtime gender override or null
+     */
+    private static String getRuntimeVoiceGender() {
+        try {
+            Class<?> controllerClass = Class.forName("oracleai.aiholo.AIHoloController");
+            java.lang.reflect.Field field = controllerClass.getDeclaredField("runtimeVoiceGender");
+            field.setAccessible(true);
+            return (String) field.get(null);
+        } catch (Exception e) {
+            // Field not accessible or doesn't exist - return null
+            return null;
+        }
+    }
+    
     // ========== Audio Output Configuration ==========
     public static String getAudioDeviceA() {
         return getEnvOrDefault("AUDIO_DEVICE_A", "CABLE Input (VB-Audio Virtual Cable)");

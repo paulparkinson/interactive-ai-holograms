@@ -121,6 +121,29 @@ public class AIHoloController {
         return "Document similarity threshold set to: " + threshold;
     }
     
+    // Voice gender runtime storage (for session-based override)
+    private static volatile String runtimeVoiceGender = null;
+    
+    @PostMapping("/config/voiceGender")
+    @ResponseBody
+    public String setVoiceGender(@RequestParam("gender") String gender) {
+        String normalized = gender == null ? "" : gender.toUpperCase().trim();
+        if (!"MALE".equals(normalized) && !"FEMALE".equals(normalized)) {
+            return "Error: Gender must be 'MALE' or 'FEMALE'";
+        }
+        runtimeVoiceGender = normalized;
+        System.out.println("Voice gender set to: " + normalized);
+        return "Voice gender set to: " + normalized + " (affects new TTS requests)";
+    }
+    
+    @GetMapping("/config/voiceGender")
+    @ResponseBody
+    public String getVoiceGender() {
+        String gender = runtimeVoiceGender != null ? runtimeVoiceGender : Configuration.getVoiceGender();
+        return "{\"voiceGender\": \"" + gender + "\", \"source\": \"" + 
+               (runtimeVoiceGender != null ? "runtime" : "environment") + "\"}";
+    }
+    
     // TTS Engine Configuration - GCP is the default for reliability
     private static final String TTS_ENGINE = Configuration.getTtsEngine();
     
@@ -297,12 +320,66 @@ public class AIHoloController {
             Map.entry("GA-IE", "ga-GA-Wavenet-A")
     );
 
+    private static final String DEFAULT_MALE_VOICE = "en-US-Polyglot-1";
+    private static final Map<String, String> MALE_VOICE_MAP = Map.ofEntries(
+            Map.entry("EN-US", "en-US-Polyglot-1"),
+            Map.entry("EN-GB", "en-GB-Wavenet-B"),
+            Map.entry("EN-AU", "en-AU-Wavenet-B"),
+            Map.entry("ES-ES", "es-ES-Wavenet-B"),
+            Map.entry("ES-MX", "es-US-Wavenet-B"),
+            Map.entry("PT-BR", "pt-BR-Wavenet-B"),
+            Map.entry("FR-FR", "fr-FR-Wavenet-B"),
+            Map.entry("DE-DE", "de-DE-Wavenet-B"),
+            Map.entry("IT-IT", "it-IT-Wavenet-C"),
+            Map.entry("RO-RO", "ro-RO-Standard-B"),
+            Map.entry("ZH-SG", "cmn-CN-Wavenet-B"),
+            Map.entry("ZH-CN", "cmn-CN-Wavenet-B"),
+            Map.entry("JA-JP", "ja-JP-Wavenet-C"),
+            Map.entry("HI-IN", "hi-IN-Wavenet-B"),
+            Map.entry("HE-IL", "he-IL-Wavenet-B"),
+            Map.entry("AR-AE", "ar-AE-Wavenet-B"),
+            Map.entry("GA-GA", "ga-GA-Standard-A"),
+            Map.entry("GA-IE", "ga-GA-Standard-A")
+    );
+
     public static String resolveFemaleVoice(String languageCode) {
         String normalized = languageCode == null ? "" : languageCode.trim().toUpperCase(Locale.ROOT);
         if (normalized.isEmpty()) {
             return DEFAULT_FEMALE_VOICE;
         }
         return FEMALE_VOICE_MAP.getOrDefault(normalized, DEFAULT_FEMALE_VOICE);
+    }
+
+    public static String resolveMaleVoice(String languageCode) {
+        String normalized = languageCode == null ? "" : languageCode.trim().toUpperCase(Locale.ROOT);
+        if (normalized.isEmpty()) {
+            return DEFAULT_MALE_VOICE;
+        }
+        return MALE_VOICE_MAP.getOrDefault(normalized, DEFAULT_MALE_VOICE);
+    }
+
+    /**
+     * Resolve voice name based on language code and gender from configuration
+     * @param languageCode The language code (e.g., "en-US", "es-ES")
+     * @return The appropriate voice name for the language and configured gender
+     */
+    public static String resolveVoice(String languageCode) {
+        String gender = Configuration.getVoiceGender();
+        return resolveVoice(languageCode, gender);
+    }
+
+    /**
+     * Resolve voice name based on language code and specified gender
+     * @param languageCode The language code (e.g., "en-US", "es-ES")
+     * @param gender "MALE" or "FEMALE"
+     * @return The appropriate voice name for the language and gender
+     */
+    public static String resolveVoice(String languageCode, String gender) {
+        if ("MALE".equalsIgnoreCase(gender)) {
+            return resolveMaleVoice(languageCode);
+        } else {
+            return resolveFemaleVoice(languageCode);
+        }
     }
 
     public AIHoloController() {
@@ -388,7 +465,7 @@ public class AIHoloController {
         AIHoloController.languageCode = languageCode;
         model.addAttribute("languageCode", languageCode);
         model.addAttribute("aiholoHostUrl", AIHOLO_HOST_URL != null ? AIHOLO_HOST_URL : "http://localhost:8080");
-        String resolvedVoice = resolveFemaleVoice(languageCode);
+        String resolvedVoice = resolveVoice(languageCode);
         model.addAttribute("voiceName", resolvedVoice);
         
         // Add dual audio configuration attributes from Configuration class
@@ -439,9 +516,9 @@ public class AIHoloController {
                 "play question: " + question +
                         " languageCode:" + languageCode + " voicename:" + voicename);
         System.out.println("modified question: " + question);
-        String resolvedVoiceName = resolveFemaleVoice(languageCode);
+        String resolvedVoiceName = resolveVoice(languageCode);
         if (voicename == null || !voicename.equals(resolvedVoiceName)) {
-            System.out.println("Overriding requested voice with female voice: " + resolvedVoiceName);
+            System.out.println("Overriding requested voice with resolved voice (" + Configuration.getVoiceGender() + "): " + resolvedVoiceName);
         }
         voicename = resolvedVoiceName;
         TTSSelection ttsSelection = TTSSelection.fromParam(ttsModeParam);

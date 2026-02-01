@@ -60,10 +60,16 @@ public class TTSAndAudio2Face {
             SynthesisInput input = SynthesisInput.newBuilder().setText(text).build();
                     //              "最受欢迎的游戏是Pods Of Kon。").build();
                     //  "最も人気のあるビデオゲームは「Pods Of Kon」です。").build();
+            // Get gender from configuration (MALE or FEMALE)
+            String gender = Configuration.getVoiceGender();
+            SsmlVoiceGender ssmlGender = "MALE".equalsIgnoreCase(gender) 
+                    ? SsmlVoiceGender.MALE 
+                    : SsmlVoiceGender.FEMALE;
+            
             VoiceSelectionParams voice =
                     VoiceSelectionParams.newBuilder()
                             .setLanguageCode(languageCode) //ja-JP, en-US, ...
-                            .setSsmlGender(SsmlVoiceGender.FEMALE) // NEUTRAL, MALE
+                            .setSsmlGender(ssmlGender) // NEUTRAL, MALE, FEMALE - from configuration
                             .setName(voicename)  // "Kore" pt-BR-Wavenet-D
                             .build();
             AudioConfig audioConfig =

@@ -171,5 +171,31 @@ Write-Host "Starting Oracle AI with Voice Assistant..."
 Write-Host "Listening for wake word... (Press Ctrl+C to stop)"
 Write-Host ""
 
+# Start a background job to open browser once app is ready
+$baseUrl = if ($env:AIHOLO_HOST_URL) { $env:AIHOLO_HOST_URL } else { "http://localhost:8082" }
+$appUrl = "$baseUrl/aiholo"
+
+Start-Job -ScriptBlock {
+    param($url)
+    Start-Sleep -Seconds 5  # Give app time to start
+    
+    # Wait for server to respond (max 60 seconds)
+    $maxAttempts = 30
+    for ($i = 0; $i -lt $maxAttempts; $i++) {
+        try {
+            $response = Invoke-WebRequest -Uri $url -Method GET -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop
+            if ($response.StatusCode -eq 200) {
+                # Open browser
+                Start-Process $url
+                Write-Host "`nBrowser opened to: $url" -ForegroundColor Green
+                Write-Host "Credentials: oracleai / oracleai`n" -ForegroundColor Cyan
+                break
+            }
+        } catch {
+            Start-Sleep -Seconds 2
+        }
+    }
+} -ArgumentList $appUrl | Out-Null
+
 mvn spring-boot:run
 # java -jar target/oracleai-0.0.1-SNAPSHOT.jar

@@ -1,0 +1,14 @@
+You are a helpful AI assistant. Answer the QUESTION based solely on the following DOCUMENTS.
+If the DOCUMENTS do not contain enough information to answer the QUESTION, say "I don't have enough information to answer that question based on the provided documents."
+
+DOCUMENTS:
+{documents}
+
+QUESTION:
+{question}
+
+INSTRUCTIONS:
+- Provide a clear, concise answer based only on the documents provided above
+- If relevant, cite specific details from the documents
+- Do not make up information not found in the documents
+- If you're unsure, acknowledge the uncertainty

@@ -114,11 +114,8 @@ public class AIHoloController {
     @PostMapping("/config/docSimilarityThreshold")
     @ResponseBody
     public String setDocSimilarityThreshold(@RequestParam("threshold") double threshold) {
-        if (threshold < 0.0 || threshold > 1.0) {
-            return "Error: Threshold must be between 0.0 and 1.0";
-        }
-        oracleai.aiholo.agents.OracleDocAgent.setSimilarityThreshold(threshold);
-        return "Document similarity threshold set to: " + threshold;
+        // Document similarity threshold is now managed by VectorRAGService configuration
+        return "Document similarity configuration has been updated to use VectorRAGService settings";
     }
     
     // Voice gender runtime storage (for session-based override)

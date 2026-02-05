@@ -1,0 +1,12 @@
+You are a helpful AI assistant. Answer the QUESTION based on the following DOCUMENTS.
+If the DOCUMENTS do not contain enough information to answer the QUESTION, you can provide an answer that is not based on the documents."
+
+DOCUMENTS:
+{documents}
+
+QUESTION:
+{question}
+
+INSTRUCTIONS:
+- Provide a clear, concise answer 
+- If relevant, cite specific details from the documents

@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vector RAG API Tester</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .endpoint {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        .endpoint h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .method {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 12px;
+            margin-right: 10px;
+        }
+        .get { background: #61affe; color: white; }
+        .post { background: #49cc90; color: white; }
+        label {
+            display: block;
+            margin-top: 15px;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #555;
+        }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 80px;
+            font-family: 'Courier New', monospace;
+        }
+        input[type="file"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 15px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        .response {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f1f3f5;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+            display: none;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .response pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 13px;
+        }
+        .response.visible {
+            display: block;
+        }
+        .loading {
+            color: #667eea;
+            font-style: italic;
+        }
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            border-color: #f5c6cb;
+        }
+        .success {
+            color: #155724;
+            background: #d4edda;
+            border-color: #c3e6cb;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Vector RAG API Tester</h1>
+        <div class="subtitle">Test Spring AI Vector RAG endpoints with Oracle 23ai</div>
+
+        <div class="grid">
+            <!-- Ping -->
+            <div class="endpoint">
+                <h3><span class="method get">GET</span> Ping</h3>
+                <label for="pingMessage">Message:</label>
+                <input type="text" id="pingMessage" placeholder="Hello Vector RAG" value="Hello Vector RAG">
+                <button onclick="ping()">Send Ping</button>
+                <div id="pingResponse" class="response"></div>
+            </div>
+
+            <!-- Generate -->
+            <div class="endpoint">
+                <h3><span class="method post">POST</span> Generate</h3>
+                <label for="generateMessage">Message:</label>
+                <textarea id="generateMessage" placeholder="What is the capital of France?">What is the capital of France?</textarea>
+                <button onclick="generate()">Generate</button>
+                <div id="generateResponse" class="response"></div>
+            </div>
+        </div>
+
+        <!-- Store (Upload PDF) -->
+        <div class="endpoint">
+            <h3><span class="method post">POST</span> Store Document</h3>
+            <label for="fileInput">Upload PDF:</label>
+            <input type="file" id="fileInput" accept=".pdf">
+            <button onclick="uploadFile()">Upload & Store</button>
+            <div id="storeResponse" class="response"></div>
+        </div>
+
+        <!-- RAG Query -->
+        <div class="endpoint">
+            <h3><span class="method post">POST</span> RAG Query</h3>
+            <label for="ragMessage">Question:</label>
+            <textarea id="ragMessage" placeholder="Ask a question about uploaded documents...">What is this document about?</textarea>
+            <button onclick="rag()">Ask RAG</button>
+            <div id="ragResponse" class="response"></div>
+        </div>
+
+        <div class="grid">
+            <!-- Search Similar -->
+            <div class="endpoint">
+                <h3><span class="method post">POST</span> Search Similar</h3>
+                <label for="searchMessage">Query Text:</label>
+                <textarea id="searchMessage" placeholder="Enter text to find similar documents...">machine learning</textarea>
+                <button onclick="searchSimilar()">Search</button>
+                <div id="searchResponse" class="response"></div>
+            </div>
+
+            <!-- Embedding -->
+            <div class="endpoint">
+                <h3><span class="method post">POST</span> Get Embedding</h3>
+                <label for="embeddingMessage">Text:</label>
+                <textarea id="embeddingMessage" placeholder="Get embedding vector for text...">artificial intelligence</textarea>
+                <button onclick="getEmbedding()">Get Embedding</button>
+                <div id="embeddingResponse" class="response"></div>
+            </div>
+        </div>
+
+        <!-- Delete -->
+        <div class="endpoint">
+            <h3><span class="method get">GET</span> Delete Documents</h3>
+            <label for="deleteIds">Document IDs (comma-separated):</label>
+            <input type="text" id="deleteIds" placeholder="id1,id2,id3">
+            <button onclick="deleteDocuments()">Delete</button>
+            <div id="deleteResponse" class="response"></div>
+        </div>
+    </div>
+
+    <script>
+        // Dynamically detect the server port from the current page
+        const BASE_URL = `${window.location.protocol}//${window.location.hostname}:${window.location.port}/vectorrag`;
+
+        function showResponse(elementId, content, isError = false) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<pre>${content}</pre>`;
+            element.className = 'response visible ' + (isError ? 'error' : 'success');
+        }
+
+        function showLoading(elementId) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = '<span class="loading">Loading...</span>';
+            element.className = 'response visible';
+        }
+
+        async function ping() {
+            const message = document.getElementById('pingMessage').value;
+            showLoading('pingResponse');
+            try {
+                const response = await fetch(`${BASE_URL}/ping?message=${encodeURIComponent(message)}`);
+                const data = await response.text();
+                showResponse('pingResponse', data);
+            } catch (error) {
+                showResponse('pingResponse', `Error: ${error.message}`, true);
+            }
+        }
+
+        async function generate() {
+            const message = document.getElementById('generateMessage').value;
+            showLoading('generateResponse');
+            try {
+                const response = await fetch(`${BASE_URL}/generate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+                const data = await response.json();
+                showResponse('generateResponse', JSON.stringify(data, null, 2));
+            } catch (error) {
+                showResponse('generateResponse', `Error: ${error.message}`, true);
+            }
+        }
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files[0]) {
+                showResponse('storeResponse', 'Please select a PDF file', true);
+                return;
+            }
+            
+            showLoading('storeResponse');
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                const response = await fetch(`${BASE_URL}/store`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.text();
+                showResponse('storeResponse', data);
+            } catch (error) {
+                showResponse('storeResponse', `Error: ${error.message}`, true);
+            }
+        }
+
+        async function rag() {
+            const message = document.getElementById('ragMessage').value;
+            showLoading('ragResponse');
+            try {
+                const response = await fetch(`${BASE_URL}/rag`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+                const data = await response.json();
+                showResponse('ragResponse', JSON.stringify(data, null, 2));
+            } catch (error) {
+                showResponse('ragResponse', `Error: ${error.message}`, true);
+            }
+        }
+
+        async function searchSimilar() {
+            const message = document.getElementById('searchMessage').value;
+            showLoading('searchResponse');
+            try {
+                const response = await fetch(`${BASE_URL}/search-similar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+                const data = await response.json();
+                showResponse('searchResponse', JSON.stringify(data, null, 2));
+            } catch (error) {
+                showResponse('searchResponse', `Error: ${error.message}`, true);
+            }
+        }
+
+        async function getEmbedding() {
+            const message = document.getElementById('embeddingMessage').value;
+            showLoading('embeddingResponse');
+            try {
+                const response = await fetch(`${BASE_URL}/embedding`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+                const data = await response.json();
+                showResponse('embeddingResponse', JSON.stringify(data, null, 2));
+            } catch (error) {
+                showResponse('embeddingResponse', `Error: ${error.message}`, true);
+            }
+        }
+
+        async function deleteDocuments() {
+            const idsInput = document.getElementById('deleteIds').value;
+            if (!idsInput) {
+                showResponse('deleteResponse', 'Please enter at least one ID', true);
+                return;
+            }
+            
+            showLoading('deleteResponse');
+            const ids = idsInput.split(',').map(id => id.trim());
+            const queryParams = ids.map(id => `id=${encodeURIComponent(id)}`).join('&');
+
+            try {
+                const response = await fetch(`${BASE_URL}/delete?${queryParams}`);
+                const data = await response.json();
+                showResponse('deleteResponse', JSON.stringify(data, null, 2));
+            } catch (error) {
+                showResponse('deleteResponse', `Error: ${error.message}`, true);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -21,6 +21,7 @@ public class AgentService {
     private final ChatGPTService chatGPTService;
     private final ConversationHistoryService conversationHistoryService;
     private final AgenticTrainingSetService trainingSetService;
+    private final OracleDocAgent oracleDocAgent;
     
     /**
      * Initialize and register all agents at service creation
@@ -28,11 +29,13 @@ public class AgentService {
     @Autowired
     public AgentService(DataSource dataSource, ChatGPTService chatGPTService, 
                         ConversationHistoryService conversationHistoryService,
-                        AgenticTrainingSetService trainingSetService) {
+                        AgenticTrainingSetService trainingSetService,
+                        OracleDocAgent oracleDocAgent) {
         this.dataSource = dataSource;
         this.chatGPTService = chatGPTService;
         this.conversationHistoryService = conversationHistoryService;
         this.trainingSetService = trainingSetService;
+        this.oracleDocAgent = oracleDocAgent;
         initializeAgents();
     }
     
@@ -62,8 +65,8 @@ public class AgentService {
         registerAgent(new FinancialAgent(langflowServerUrl, langflowFlowId, langflowApiKey));
         registerAgent(new GamerAgent(openaiKey));
         
-        // Oracle Doc Agent with vector database integration (requires DataSource and ChatGPT)
-        registerAgent(new OracleDocAgent(dataSource, chatGPTService));
+        // Oracle Doc Agent is autowired via Spring (@Component annotation)
+        registerAgent(oracleDocAgent);
         
         // DirectLLMAgent is the preferred fallback if OpenAI key is available
         registerAgent(new DirectLLMAgent(openaiKey, trainingSetService));

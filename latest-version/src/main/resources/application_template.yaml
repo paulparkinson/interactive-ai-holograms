@@ -44,12 +44,17 @@ spring:
       idle-timeout: 600000
       max-lifetime: 1800000
 
-#  ai:
-#    vectorstore:
-#      oracle:
-#        index-type: IVF
-#        distance-type: COSINE
-#        dimensions: 1536
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:your-api-key-here}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${OPENAI_CHAT_MODEL:gpt-3.5-turbo}
+          temperature: 0.7
+      embedding:
+        options:
+          model: ${OPENAI_EMBEDDING_MODEL:text-embedding-ada-002}
 
 #logging:
 #  level:

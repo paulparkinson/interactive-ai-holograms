@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Upload - Oracle AI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .upload-section, .files-section {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .upload-area {
+            border: 2px dashed #667eea;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            background: #f8f9ff;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #764ba2;
+            background: #e8ebff;
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s;
+            display: inline-block;
+            margin-top: 15px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .file-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e8f5e9;
+            border-radius: 5px;
+            display: none;
+        }
+
+        .file-info.show {
+            display: block;
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .message.show {
+            display: block;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .files-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .files-table th,
+        .files-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .files-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .files-table tr:hover {
+            background: #f9f9f9;
+        }
+
+        .action-btn {
+            padding: 6px 12px;
+            margin: 0 3px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .download-btn {
+            background: #4caf50;
+            color: white;
+        }
+
+        .download-btn:hover {
+            background: #45a049;
+        }
+
+        .delete-btn {
+            background: #f44336;
+            color: white;
+        }
+
+        .delete-btn:hover {
+            background: #da190b;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .file-type-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .curl-example {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+
+        .curl-example code {
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📚 PDF Upload to Oracle Database</h1>
+            <p class="subtitle">Upload files to MY_BOOKS table in Oracle AI Database</p>
+        </header>
+
+        <div class="upload-section">
+            <h2>📤 Upload File</h2>
+            <form id="uploadForm">
+                <div class="upload-area" id="dropArea">
+                    <div class="upload-icon">📁</div>
+                    <p><strong>Click to browse</strong> or drag and drop files here</p>
+                    <p style="color: #999; font-size: 14px; margin-top: 10px;">Supports PDF, images, text files, and more</p>
+                    <input type="file" id="fileInput" class="file-input" accept="*/*">
+                </div>
+                <div class="file-info" id="fileInfo"></div>
+                <button type="submit" class="btn" id="uploadBtn" disabled>Upload File</button>
+                <div class="message" id="message"></div>
+            </form>
+
+            <div class="curl-example">
+                <strong>📋 cURL Example:</strong><br>
+                <code>curl -X POST http://localhost:80/api/pdf/upload -F "file=@/path/to/your/file.pdf"</code>
+            </div>
+        </div>
+
+        <div class="upload-section">
+            <h2>🔍 Vector Search AI Query</h2>
+            <p style="color: #666; margin-bottom: 20px;">Query using generate_text_response_all_docs with vector search across all documents</p>
+            <form id="vectorAiQueryForm">
+                <div style="margin-bottom: 15px;">
+                    <label for="vectorQuestion" style="display: block; margin-bottom: 5px; font-weight: 600;">Question:</label>
+                    <input type="text" id="vectorQuestion" name="vectorQuestion" placeholder="e.g., What is vector search?" 
+                           style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 5px; font-size: 14px;" required>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label for="topn" style="display: block; margin-bottom: 5px; font-weight: 600;">Top N Results:</label>
+                    <input type="number" id="topn" name="topn" value="5" min="1" max="20"
+                           style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 5px; font-size: 14px;" required>
+                </div>
+                <button type="submit" class="btn" id="vectorQueryBtn">🔍 Query Vector AI</button>
+                <button type="button" class="btn" id="vectorSearchOnlyBtn" style="background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); margin-left: 10px;">📊 Vector Search Only</button>
+                <div class="message" id="vectorAiMessage"></div>
+                <div id="vectorAiResponse" style="display: none; margin-top: 20px; padding: 20px; background: #f0fff0; border-left: 4px solid #4caf50; border-radius: 5px;">
+                    <h3 style="margin-bottom: 10px; color: #333;">🤖 AI Response:</h3>
+                    <div id="vectorAiResponseText" style="color: #555; line-height: 1.6; white-space: pre-wrap;"></div>
+                    
+                    <div id="vectorDocsContainer" style="margin-top: 20px; display: none;">
+                        <h3 style="margin-bottom: 10px; color: #333;">📚 Source Document IDs:</h3>
+                        <div id="vectorDocIds" style="font-family: monospace; background: white; padding: 10px; border-radius: 5px;"></div>
+                    </div>
+                </div>
+            </form>
+
+            <div class="curl-example">
+                <strong>📋 cURL Example:</strong><br>
+                <code>curl -X POST "http://localhost:80/api/pdf/query-vector-ai" -d "question=What is vector search?" -d "topn=5"</code>
+            </div>
+        </div>
+
+        <div class="upload-section">
+            <h2>🤖 Oracle AI Query</h2>
+            <p style="color: #666; margin-bottom: 20px;">Query the Oracle AI Database using generate_text_response2 function</p>
+            <form id="aiQueryForm">
+                <div style="margin-bottom: 15px;">
+                    <label for="question" style="display: block; margin-bottom: 5px; font-weight: 600;">Question:</label>
+                    <input type="text" id="question" name="question" placeholder="e.g., What is vector search?" 
+                           style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 5px; font-size: 14px;" required>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                    <div>
+                        <label for="param1" style="display: block; margin-bottom: 5px; font-weight: 600;">Parameter 1:</label>
+                        <input type="number" id="param1" name="param1" value="1" min="1" 
+                               style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 5px; font-size: 14px;" required>
+                    </div>
+                    <div>
+                        <label for="param2" style="display: block; margin-bottom: 5px; font-weight: 600;">Parameter 2:</label>
+                        <input type="number" id="param2" name="param2" value="3" min="1" 
+                               style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 5px; font-size: 14px;" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn" id="queryBtn">🔍 Query AI</button>
+                <div class="message" id="aiMessage"></div>
+                <div id="aiResponse" style="display: none; margin-top: 20px; padding: 20px; background: #f0f7ff; border-left: 4px solid #667eea; border-radius: 5px;">
+                    <h3 style="margin-bottom: 10px; color: #333;">AI Response:</h3>
+                    <div id="aiResponseText" style="color: #555; line-height: 1.6; white-space: pre-wrap;"></div>
+                    
+                    <div id="snippetsContainer" style="margin-top: 20px;">
+                        <h3 style="margin-bottom: 10px; color: #333;">📚 Source Documents:</h3>
+                        <div id="snippetsList"></div>
+                    </div>
+                </div>
+            </form>
+
+            <div class="curl-example">
+                <strong>📋 cURL Example:</strong><br>
+                <code>curl -X POST "http://localhost:80/api/pdf/query-ai" -d "question=What is vector search?" -d "param1=1" -d "param2=3"</code>
+            </div>
+        </div>
+
+        <div class="files-section">
+            <h2>📋 Uploaded Files</h2>
+            <button class="btn" onclick="refreshFileList()">🔄 Refresh List</button>
+            <div id="filesContainer">
+                <div class="empty-state">Loading files...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const dropArea = document.getElementById('dropArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadForm = document.getElementById('uploadForm');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const fileInfo = document.getElementById('fileInfo');
+        const message = document.getElementById('message');
+        const filesContainer = document.getElementById('filesContainer');
+
+        // Click to browse
+        dropArea.addEventListener('click', () => fileInput.click());
+
+        // File selection
+        fileInput.addEventListener('change', handleFileSelect);
+
+        // Drag and drop
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => dropArea.classList.add('dragover'), false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => dropArea.classList.remove('dragover'), false);
+        });
+
+        dropArea.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                handleFileSelect();
+            }
+        }
+
+        function handleFileSelect() {
+            const file = fileInput.files[0];
+            if (file) {
+                const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
+                fileInfo.innerHTML = `
+                    <strong>Selected File:</strong><br>
+                    📄 Name: ${file.name}<br>
+                    📊 Size: ${sizeInMB} MB<br>
+                    📋 Type: ${file.type || 'Unknown'}
+                `;
+                fileInfo.classList.add('show');
+                uploadBtn.disabled = false;
+                message.classList.remove('show');
+            }
+        }
+
+        // Upload form submission
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!fileInput.files.length) {
+                showMessage('Please select a file', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = '<span class="loading"></span> Uploading...';
+
+            try {
+                const response = await fetch('/api/pdf/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage(`✓ File uploaded successfully!<br>ID: ${data.id}<br>File: ${data.fileName}<br>Size: ${(data.fileSize / 1024).toFixed(2)} KB`, 'success');
+                    fileInput.value = '';
+                    fileInfo.classList.remove('show');
+                    uploadBtn.disabled = true;
+                    uploadBtn.innerHTML = 'Upload File';
+                    refreshFileList();
+                } else {
+                    showMessage(`✗ Upload failed: ${data.error}`, 'error');
+                    uploadBtn.disabled = false;
+                    uploadBtn.innerHTML = 'Upload File';
+                }
+            } catch (error) {
+                showMessage(`✗ Upload failed: ${error.message}`, 'error');
+                uploadBtn.disabled = false;
+                uploadBtn.innerHTML = 'Upload File';
+            }
+        });
+
+        function showMessage(text, type) {
+            message.innerHTML = text;
+            message.className = `message ${type} show`;
+        }
+
+        // AI Query form submission
+        const aiQueryForm = document.getElementById('aiQueryForm');
+        const queryBtn = document.getElementById('queryBtn');
+        const aiMessage = document.getElementById('aiMessage');
+        const aiResponse = document.getElementById('aiResponse');
+        const aiResponseText = document.getElementById('aiResponseText');
+
+        aiQueryForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const question = document.getElementById('question').value;
+            const param1 = document.getElementById('param1').value;
+            const param2 = document.getElementById('param2').value;
+
+            queryBtn.disabled = true;
+            queryBtn.innerHTML = '<span class="loading"></span> Querying AI...';
+            aiMessage.classList.remove('show');
+            aiResponse.style.display = 'none';
+
+            try {
+                const formData = new URLSearchParams();
+                formData.append('question', question);
+                formData.append('param1', param1);
+                formData.append('param2', param2);
+
+                const response = await fetch('/api/pdf/query-ai', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    aiResponseText.textContent = data.response;
+                    
+                    // Display snippets and file names
+                    const snippetsList = document.getElementById('snippetsList');
+                    if (data.snippets && data.snippets.length > 0) {
+                        let snippetsHtml = '';
+                        data.snippets.forEach((snippet, index) => {
+                            const snippetText = snippet.SNIPPET ? 
+                                (snippet.SNIPPET.length > 200 ? snippet.SNIPPET.substring(0, 200) + '...' : snippet.SNIPPET) : 
+                                'Binary content';
+                            const date = new Date(snippet.CREATED_ON).toLocaleString();
+                            snippetsHtml += `
+                                <div style="background: white; padding: 15px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #e0e0e0;">
+                                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                                        <strong style="color: #667eea;">📄 ${snippet.FILE_NAME}</strong>
+                                        <span class="file-type-badge">ID: ${snippet.ID}</span>
+                                    </div>
+                                    <div style="color: #666; font-size: 12px; margin-bottom: 8px;">
+                                        Size: ${(snippet.FILE_SIZE / 1024).toFixed(2)} KB | Uploaded: ${date}
+                                    </div>
+                                    <div style="color: #555; font-size: 13px; font-family: monospace; background: #f9f9f9; padding: 8px; border-radius: 3px;">
+                                        ${snippetText}
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        snippetsList.innerHTML = snippetsHtml;
+                        document.getElementById('snippetsContainer').style.display = 'block';
+                    } else {
+                        document.getElementById('snippetsContainer').style.display = 'none';
+                    }
+                    
+                    aiResponse.style.display = 'block';
+                    aiMessage.innerHTML = '✓ Query executed successfully!';
+                    aiMessage.className = 'message success show';
+                } else {
+                    aiMessage.innerHTML = `✗ Query failed: ${data.error}`;
+                    aiMessage.className = 'message error show';
+                }
+
+                queryBtn.disabled = false;
+                queryBtn.innerHTML = '🔍 Query AI';
+            } catch (error) {
+                aiMessage.innerHTML = `✗ Query failed: ${error.message}`;
+                aiMessage.className = 'message error show';
+                queryBtn.disabled = false;
+                queryBtn.innerHTML = '🔍 Query AI';
+            }
+        });
+
+        // Vector AI Query form submission
+        const vectorAiQueryForm = document.getElementById('vectorAiQueryForm');
+        const vectorQueryBtn = document.getElementById('vectorQueryBtn');
+        const vectorAiMessage = document.getElementById('vectorAiMessage');
+        const vectorAiResponse = document.getElementById('vectorAiResponse');
+        const vectorAiResponseText = document.getElementById('vectorAiResponseText');
+
+        vectorAiQueryForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const question = document.getElementById('vectorQuestion').value;
+            const topn = document.getElementById('topn').value;
+
+            vectorQueryBtn.disabled = true;
+            vectorQueryBtn.innerHTML = '<span class="loading"></span> Querying Vector AI...';
+            vectorAiMessage.classList.remove('show');
+            vectorAiResponse.style.display = 'none';
+
+            try {
+                const formData = new URLSearchParams();
+                formData.append('question', question);
+                formData.append('topn', topn);
+
+                const response = await fetch('/api/pdf/query-vector-ai', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    try {
+                        // Parse the result JSON string
+                        const result = JSON.parse(data.result);
+                        
+                        if (result.error) {
+                            vectorAiMessage.innerHTML = `✗ Query failed: ${result.error}`;
+                            vectorAiMessage.className = 'message error show';
+                        } else {
+                            // Extract response and doc_ids
+                            const aiResponse = result.response?.choices?.[0]?.message?.content || 
+                                             result.response?.response || 
+                                             JSON.stringify(result.response);
+                            
+                            vectorAiResponseText.textContent = aiResponse;
+                            
+                            // Display doc IDs if available
+                            if (result.doc_ids && result.doc_ids.length > 0) {
+                                document.getElementById('vectorDocIds').textContent = result.doc_ids.join(', ');
+                                document.getElementById('vectorDocsContainer').style.display = 'block';
+                            } else {
+                                document.getElementById('vectorDocsContainer').style.display = 'none';
+                            }
+                            
+                            vectorAiResponse.style.display = 'block';
+                            vectorAiMessage.innerHTML = '✓ Query executed successfully!';
+                            vectorAiMessage.className = 'message success show';
+                        }
+                    } catch (parseError) {
+                        // If parsing fails, show the raw result
+                        vectorAiResponseText.textContent = data.result;
+                        vectorAiResponse.style.display = 'block';
+                        vectorAiMessage.innerHTML = '✓ Query executed (raw result)';
+                        vectorAiMessage.className = 'message success show';
+                    }
+                } else {
+                    vectorAiMessage.innerHTML = `✗ Query failed: ${data.error}`;
+                    vectorAiMessage.className = 'message error show';
+                }
+
+                vectorQueryBtn.disabled = false;
+                vectorQueryBtn.innerHTML = '🔍 Query Vector AI';
+            } catch (error) {
+                vectorAiMessage.innerHTML = `✗ Query failed: ${error.message}`;
+                vectorAiMessage.className = 'message error show';
+                vectorQueryBtn.disabled = false;
+                vectorQueryBtn.innerHTML = '🔍 Query Vector AI';
+            }
+        });
+
+        // Vector Search Only button
+        document.getElementById('vectorSearchOnlyBtn').addEventListener('click', async (e) => {
+            e.preventDefault();
+            
+            const question = document.getElementById('vectorQuestion').value;
+            const topn = document.getElementById('topn').value;
+
+            if (!question) {
+                vectorAiMessage.innerHTML = '✗ Please enter a question';
+                vectorAiMessage.className = 'message error show';
+                return;
+            }
+
+            const btn = e.target;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading"></span> Searching...';
+            vectorAiMessage.classList.remove('show');
+            vectorAiResponse.style.display = 'none';
+
+            try {
+                const formData = new URLSearchParams();
+                formData.append('question', question);
+                formData.append('topn', topn);
+
+                const response = await fetch('/api/pdf/query-vector-search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    try {
+                        const result = JSON.parse(data.result);
+                        
+                        if (result.error) {
+                            vectorAiMessage.innerHTML = `✗ Search failed: ${result.error}`;
+                            vectorAiMessage.className = 'message error show';
+                        } else {
+                            let html = '<h3 style="color: #333; margin-bottom: 10px;">🔍 Matching Text Chunks:</h3>';
+                            
+                            if (result.chunks && result.chunks.length > 0) {
+                                let displayedCount = 0;
+                                result.chunks.forEach((chunk, idx) => {
+                                    // Trim and clean the text
+                                    const cleanText = chunk.text.trim().replace(/\s+/g, ' ');
+                                    
+                                    // Only display non-empty chunks
+                                    if (cleanText.length > 10) {
+                                        displayedCount++;
+                                        html += `
+                                            <div style="background: white; padding: 12px; margin-bottom: 10px; border-radius: 5px; border-left: 3px solid #4caf50;">
+                                                <div style="font-weight: 600; color: #4caf50; margin-bottom: 5px;">
+                                                    Chunk ${displayedCount} - Doc ID: ${chunk.doc_id} | Embed ID: ${chunk.embed_id}
+                                                </div>
+                                                <div style="color: #555; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word;">
+                                                    ${cleanText}
+                                                </div>
+                                            </div>
+                                        `;
+                                    }
+                                });
+                                
+                                if (displayedCount === 0) {
+                                    html += '<p style="color: #999;">No meaningful chunks found (all chunks were empty or too short)</p>';
+                                }
+                            } else {
+                                html += '<p style="color: #999;">No matching chunks found</p>';
+                            }
+                            
+                            vectorAiResponseText.innerHTML = html;
+                            
+                            if (result.doc_ids && result.doc_ids.length > 0) {
+                                document.getElementById('vectorDocIds').textContent = result.doc_ids.join(', ');
+                                document.getElementById('vectorDocsContainer').style.display = 'block';
+                            }
+                            
+                            vectorAiResponse.style.display = 'block';
+                            vectorAiMessage.innerHTML = `✓ Found ${result.chunks ? result.chunks.length : 0} matching chunks`;
+                            vectorAiMessage.className = 'message success show';
+                        }
+                    } catch (parseError) {
+                        vectorAiResponseText.textContent = data.result;
+                        vectorAiResponse.style.display = 'block';
+                    }
+                } else {
+                    vectorAiMessage.innerHTML = `✗ Search failed: ${data.error}`;
+                    vectorAiMessage.className = 'message error show';
+                }
+
+                btn.disabled = false;
+                btn.innerHTML = '📊 Vector Search Only';
+            } catch (error) {
+                vectorAiMessage.innerHTML = `✗ Search failed: ${error.message}`;
+                vectorAiMessage.className = 'message error show';
+                btn.disabled = false;
+                btn.innerHTML = '📊 Vector Search Only';
+            }
+        });
+
+        // Load and display files
+        async function refreshFileList() {
+            try {
+                const response = await fetch('/api/pdf/list');
+                const data = await response.json();
+
+                if (data.success && data.files.length > 0) {
+                    let html = `
+                        <table class="files-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>File Name</th>
+                                    <th>Type</th>
+                                    <th>Size</th>
+                                    <th>Uploaded</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+
+                    data.files.forEach(file => {
+                        const sizeKB = (file.FILE_SIZE / 1024).toFixed(2);
+                        const date = new Date(file.CREATED_ON).toLocaleString();
+                        html += `
+                            <tr>
+                                <td>${file.ID}</td>
+                                <td>${file.FILE_NAME}</td>
+                                <td><span class="file-type-badge">${file.FILE_TYPE || 'Unknown'}</span></td>
+                                <td>${sizeKB} KB</td>
+                                <td>${date}</td>
+                                <td>
+                                    <button class="action-btn download-btn" onclick="downloadFile(${file.ID}, '${file.FILE_NAME}')">⬇ Download</button>
+                                    <button class="action-btn delete-btn" onclick="deleteFile(${file.ID})">🗑 Delete</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+
+                    html += `
+                            </tbody>
+                        </table>
+                        <p style="margin-top: 15px; color: #666;">Total files: ${data.count}</p>
+                    `;
+                    filesContainer.innerHTML = html;
+                } else {
+                    filesContainer.innerHTML = '<div class="empty-state">No files uploaded yet</div>';
+                }
+            } catch (error) {
+                filesContainer.innerHTML = `<div class="empty-state">Error loading files: ${error.message}</div>`;
+            }
+        }
+
+        async function downloadFile(id, filename) {
+            try {
+                const response = await fetch(`/api/pdf/download/${id}`);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                } else {
+                    alert('Download failed');
+                }
+            } catch (error) {
+                alert(`Download error: ${error.message}`);
+            }
+        }
+
+        async function deleteFile(id) {
+            if (!confirm('Are you sure you want to delete this file?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/pdf/delete/${id}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('File deleted successfully');
+                    refreshFileList();
+                } else {
+                    alert(`Delete failed: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Delete error: ${error.message}`);
+            }
+        }
+
+        // Load files on page load
+        refreshFileList();
+    </script>
+</body>
+</html>

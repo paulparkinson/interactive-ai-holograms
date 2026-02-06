@@ -56,6 +56,12 @@ spring:
         options:
           model: ${OPENAI_EMBEDDING_MODEL:text-embedding-ada-002}
 
+vectorrag:
+  table-name: ${VECTORRAG_TABLE_NAME:vector_store}
+  drop-at-startup: ${VECTORRAG_DROP_AT_STARTUP:false}
+  distance-metric: ${VECTORRAG_DISTANCE_METRIC:COSINE}
+  temp-dir: ${VECTORRAG_TEMP_DIR:tempDir}
+  
 #logging:
 #  level:
 #    root: INFO

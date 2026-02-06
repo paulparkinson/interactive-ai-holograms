@@ -1,8 +1,8 @@
 package oracleai.aiholo.agents;
 
 import oracleai.status.StatusController;
+import oracleai.aiholo.util.OutputFileWriter;
 import org.json.JSONObject;
-import java.io.FileWriter;
 import java.io.IOException;
 
 /**
@@ -68,13 +68,8 @@ public class DigitalTwinAgent implements Agent {
                 System.out.println("Digital Twin Agent found model: " + model);
                 
                 // Write to aiholo_output.txt
-                String filePath = outputFilePath != null ? outputFilePath : "aiholo_output.txt";
-                try (FileWriter writer = new FileWriter(filePath)) {
-                    JSONObject json = new JSONObject();
-                    json.put("data", getValueName());
-                    writer.write(json.toString());
-                    writer.flush();
-                    System.out.println("Digital Twin Agent wrote to: " + filePath);
+                try {
+                    OutputFileWriter.writeData(outputFilePath, getValueName());
                 } catch (IOException e) {
                     System.err.println("Error writing digital twin agent to file: " + e.getMessage());
                 }

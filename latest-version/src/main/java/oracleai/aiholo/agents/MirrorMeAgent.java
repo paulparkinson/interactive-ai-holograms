@@ -1,7 +1,6 @@
 package oracleai.aiholo.agents;
 
-import org.json.JSONObject;
-import java.io.FileWriter;
+import oracleai.aiholo.util.OutputFileWriter;
 import java.io.IOException;
 
 /**
@@ -43,13 +42,9 @@ public class MirrorMeAgent implements Agent {
     public String processQuestion(String question) {
         System.out.println("Mirror Me Agent activating mirror mode");
         
-        String filePath = outputFilePath != null ? outputFilePath : "aiholo_output.txt";
-        try (FileWriter writer = new FileWriter(filePath)) {
-            JSONObject json = new JSONObject();
-            json.put("data", "mirrorme");
-            writer.write(json.toString());
-            writer.flush();
-            System.out.println("Mirror Me mode activated - wrote to: " + filePath);
+        try {
+            OutputFileWriter.writeData(outputFilePath, getValueName());
+            System.out.println("Mirror Me mode activated");
         } catch (IOException e) {
             System.err.println("Error writing mirror me to file: " + e.getMessage());
             return "Error activating Mirror Me mode: " + e.getMessage();

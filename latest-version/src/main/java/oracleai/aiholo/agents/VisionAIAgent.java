@@ -42,7 +42,7 @@ public class VisionAIAgent implements Agent {
     @Override
     public String[][] getKeywords() {
         return new String[][] {
-            {"what", "see"}
+            {"what", "do", "you", "see"}
         };
     }
 

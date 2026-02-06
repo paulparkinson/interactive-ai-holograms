@@ -1,7 +1,7 @@
 package oracleai.aiholo.agents;
 
 import org.json.JSONObject;
-import java.io.FileWriter;
+import oracleai.aiholo.util.OutputFileWriter;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -71,16 +71,11 @@ public class SignAgent implements Agent {
                 System.out.println("Sign Agent found sign: " + sign);
                 
                 // Write to aiholo_output.txt
-                // String filePath = outputFilePath != null ? outputFilePath : "aiholo_output.txt";
-                // try (FileWriter writer = new FileWriter(filePath)) {
-                //     JSONObject json = new JSONObject();
-                //     json.put("data", getValueName());
-                //     writer.write(json.toString());
-                //     writer.flush();
-                //     System.out.println("Sign Agent wrote to: " + filePath);
-                // } catch (IOException e) {
-                //     System.err.println("Error writing sign agent to file: " + e.getMessage());
-                // }
+                try {
+                    OutputFileWriter.writeData(outputFilePath, getValueName());
+                } catch (IOException e) {
+                    System.err.println("Error writing sign agent to file: " + e.getMessage());
+                }
                 
                 // Call the aiholo.org API to set the sign value
                 try {

@@ -38,4 +38,13 @@ public interface Agent {
      * @return true if this agent is properly configured and ready to use
      */
     boolean isConfigured();
+    
+    /**
+     * @return true if this agent writes its own value to the output file.
+     *         When true, the controller will skip calling AgentStateService.writeAgentResponse.
+     *         Default is false (controller handles file writing).
+     */
+    default boolean handlesOwnFileWriting() {
+        return false;
+    }
 }

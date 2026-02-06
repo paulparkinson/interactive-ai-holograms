@@ -61,6 +61,7 @@ public class AgentService {
         // Register agents in priority order
         registerAgent(new ClearHistoryAgent(conversationHistoryService));
         registerAgent(new MirrorMeAgent(outputFilePath));
+        registerAgent(new ShowMeNavyShipsAgent(outputFilePath));
         registerAgent(new DigitalTwinAgent(outputFilePath));
         registerAgent(new SignAgent(outputFilePath));
         registerAgent(new VisionAIAgent(ociVisionEndpoint, ociCompartmentId, ociApiKey));

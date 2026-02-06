@@ -673,8 +673,14 @@ public class AIHoloController {
                 answer = agentResponse.getAnswer();
                 theValue = agentResponse.getValueName();
                 
-                System.out.println("---------AGENT USED: " + agentResponse.getAgentName() + " writing value: " + theValue + " to file");
-                agentStateService.writeAgentResponse(agentResponse);
+                // Only write to file if agent doesn't handle its own file writing
+                Agent matchingAgent = agentService.findAgentForQuestion(question);
+                if (matchingAgent != null && !matchingAgent.handlesOwnFileWriting()) {
+                    System.out.println("---------AGENT USED: " + agentResponse.getAgentName() + " writing value: " + theValue + " to file");
+                    agentStateService.writeAgentResponse(agentResponse);
+                } else {
+                    System.out.println("---------AGENT USED: " + agentResponse.getAgentName() + " (handles own file writing)");
+                }
             }
 
         } else {

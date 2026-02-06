@@ -1,9 +1,8 @@
 package oracleai.aiholo;
 
-import org.json.JSONObject;
+import oracleai.aiholo.util.OutputFileWriter;
 import org.springframework.stereotype.Service;
 
-import java.io.FileWriter;
 import java.io.IOException;
 
 /**
@@ -16,7 +15,6 @@ import java.io.IOException;
 public class AgentStateService {
     
     private static final String OUTPUT_FILE_PATH = Configuration.getOutputFilePath();
-    private static final String DEFAULT_FILE_PATH = "aiholo_output.txt";
     
     /**
      * Writes the agent value name to the output file.
@@ -26,13 +24,8 @@ public class AgentStateService {
      * @return true if write was successful, false otherwise
      */
     public boolean writeAgentValue(String valueName) {
-        String filePath = OUTPUT_FILE_PATH != null ? OUTPUT_FILE_PATH : DEFAULT_FILE_PATH;
-        try (FileWriter writer = new FileWriter(filePath)) {
-            JSONObject json = new JSONObject();
-            json.put("data", valueName);
-            writer.write(json.toString());
-            writer.flush();
-            System.out.println("Successfully wrote agent value '" + valueName + "' to " + filePath);
+        try {
+            OutputFileWriter.writeData(OUTPUT_FILE_PATH, valueName);
             return true;
         } catch (IOException e) {
             System.err.println("Error writing agent value to file: " + e.getMessage());

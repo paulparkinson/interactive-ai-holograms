@@ -22,6 +22,7 @@ public class AgentService {
     private final ConversationHistoryService conversationHistoryService;
     private final AgenticTrainingSetService trainingSetService;
     private final OracleDocAgent oracleDocAgent;
+    private final EdgeRAGAgent edgeRAGAgent;
     
     /**
      * Initialize and register all agents at service creation
@@ -30,12 +31,14 @@ public class AgentService {
     public AgentService(DataSource dataSource, ChatGPTService chatGPTService, 
                         ConversationHistoryService conversationHistoryService,
                         AgenticTrainingSetService trainingSetService,
-                        OracleDocAgent oracleDocAgent) {
+                        OracleDocAgent oracleDocAgent,
+                        EdgeRAGAgent edgeRAGAgent) {
         this.dataSource = dataSource;
         this.chatGPTService = chatGPTService;
         this.conversationHistoryService = conversationHistoryService;
         this.trainingSetService = trainingSetService;
         this.oracleDocAgent = oracleDocAgent;
+        this.edgeRAGAgent = edgeRAGAgent;
         initializeAgents();
     }
     
@@ -65,8 +68,9 @@ public class AgentService {
         registerAgent(new FinancialAgent(langflowServerUrl, langflowFlowId, langflowApiKey));
         registerAgent(new GamerAgent(openaiKey));
         
-        // Oracle Doc Agent is autowired via Spring (@Component annotation)
+        // Oracle Doc Agent and Edge RAG Agent are autowired via Spring (@Component annotation)
         registerAgent(oracleDocAgent);
+        registerAgent(edgeRAGAgent);
         
         // DirectLLMAgent is the preferred fallback if OpenAI key is available
         registerAgent(new DirectLLMAgent(openaiKey, trainingSetService));

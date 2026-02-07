@@ -64,8 +64,10 @@ public class ShowMeNavyShipsAgent implements Agent {
         String matchedShip = null;
         
         // Search for any ship name in the question
+        // Replace dashes with spaces for matching (e.g., "john-finn" matches "john finn")
         for (String ship : AVAILABLE_SHIPS) {
-            if (lowerQuestion.contains(ship)) {
+            String searchName = ship.replace("-", " ");
+            if (lowerQuestion.contains(searchName)) {
                 matchedShip = ship;
                 break;
             }

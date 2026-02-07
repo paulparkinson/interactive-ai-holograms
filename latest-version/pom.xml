@@ -169,10 +169,14 @@
 			<version>0.12.0</version>
 		</dependency>
 
+		<!-- Spring Security disabled - uncomment to enable
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
+
+		-->
 
 
 		<!-- <dependency>

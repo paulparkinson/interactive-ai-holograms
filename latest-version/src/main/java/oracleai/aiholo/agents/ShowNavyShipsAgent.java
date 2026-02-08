@@ -2,12 +2,14 @@ package oracleai.aiholo.agents;
 
 import oracleai.aiholo.util.OutputFileWriter;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
- * Show Me Navy Ships agent that displays specific Navy ship images.
+ * Show Navy Ships agent that displays specific Navy ship images.
  * Triggered by "show ship" and searches for ship names in the question.
  */
-public class ShowMeNavyShipsAgent implements Agent {
+public class ShowNavyShipsAgent implements Agent {
     private final String outputFilePath;
     
     private static final String[] AVAILABLE_SHIPS = {
@@ -23,13 +25,27 @@ public class ShowMeNavyShipsAgent implements Agent {
         "miguel-keith"
     };
     
-    public ShowMeNavyShipsAgent(String outputFilePath) {
+    private static final Map<String, String> SHIP_DESCRIPTIONS = new HashMap<>();
+    static {
+        SHIP_DESCRIPTIONS.put("zumwalt", "DDG-1000, advanced stealth destroyer with electric propulsion and integrated power system");
+        SHIP_DESCRIPTIONS.put("ford", "CVN-78, newest Gerald R. Ford-class supercarrier with electromagnetic aircraft launch system");
+        SHIP_DESCRIPTIONS.put("monsoor", "DDG-1001, Zumwalt-class destroyer with advanced weapon systems");
+        SHIP_DESCRIPTIONS.put("john-finn", "DDG-113, Arleigh Burke-class guided missile destroyer");
+        SHIP_DESCRIPTIONS.put("jack-lucas", "DDG-125, Flight III Arleigh Burke-class destroyer with enhanced radar capabilities");
+        SHIP_DESCRIPTIONS.put("tripoli", "LHA-7, America-class amphibious assault ship optimized for aviation operations");
+        SHIP_DESCRIPTIONS.put("columbia", "SSBN-826, lead ship of Columbia-class ballistic missile submarines");
+        SHIP_DESCRIPTIONS.put("virginia", "SSN-774, Virginia-class fast-attack submarine with advanced stealth");
+        SHIP_DESCRIPTIONS.put("canberra", "LCS-30, Independence-class littoral combat ship");
+        SHIP_DESCRIPTIONS.put("miguel-keith", "ESB-5, Expeditionary Sea Base for special operations support");
+    }
+    
+    public ShowNavyShipsAgent(String outputFilePath) {
         this.outputFilePath = outputFilePath;
     }
     
     @Override
     public String getName() {
-        return "Show Me Navy Ships Agent";
+        return "Show Navy Ships Agent";
     }
 
     @Override
@@ -58,9 +74,15 @@ public class ShowMeNavyShipsAgent implements Agent {
 
     @Override
     public String processQuestion(String question) {
-        System.out.println("Show Me Navy Ships Agent processing: " + question);
+        System.out.println("Show Navy Ships Agent processing: " + question);
         
         String lowerQuestion = question.toLowerCase();
+        
+        // Check if user wants to list all ships
+        if (lowerQuestion.contains("list")) {
+            return listAvailableShips();
+        }
+        
         String matchedShip = null;
         
         // Search for any ship name in the question
@@ -78,8 +100,9 @@ public class ShowMeNavyShipsAgent implements Agent {
             String shipValue = "ship-" + matchedShip;
             try {
                 OutputFileWriter.writeData(outputFilePath, shipValue);
-                System.out.println("Showing Navy ship: " + matchedShip);
-                return "Displaying " + formatShipName(matchedShip) + " now.";
+                String description = SHIP_DESCRIPTIONS.get(matchedShip);
+                System.out.println("Showing Navy ship: " + matchedShip + " - " + description);
+                return "Displaying " + formatShipName(matchedShip) + " now. " + description + ".";
             } catch (IOException e) {
                 System.err.println("Error writing ship data to file: " + e.getMessage());
                 return "Error displaying ship: " + e.getMessage();
@@ -88,20 +111,30 @@ public class ShowMeNavyShipsAgent implements Agent {
             // No ship matched - list available ships
             StringBuilder response = new StringBuilder();
             response.append("I'm afraid there are no ships of that name in the image database. ");
-            response.append("Current ships include: ");
-            
-            for (int i = 0; i < AVAILABLE_SHIPS.length; i++) {
-                response.append(formatShipName(AVAILABLE_SHIPS[i]));
-                if (i < AVAILABLE_SHIPS.length - 2) {
-                    response.append(", ");
-                } else if (i == AVAILABLE_SHIPS.length - 2) {
-                    response.append(", and ");
-                }
-            }
-            response.append(".");
+            response.append(listAvailableShips());
             
             return response.toString();
         }
+    }
+    
+    /**
+     * Returns a formatted list of available ships
+     */
+    private String listAvailableShips() {
+        StringBuilder response = new StringBuilder();
+        response.append("Current ships include: ");
+        
+        for (int i = 0; i < AVAILABLE_SHIPS.length; i++) {
+            response.append(formatShipName(AVAILABLE_SHIPS[i]));
+            if (i < AVAILABLE_SHIPS.length - 2) {
+                response.append(", ");
+            } else if (i == AVAILABLE_SHIPS.length - 2) {
+                response.append(", and ");
+            }
+        }
+        response.append(".");
+        
+        return response.toString();
     }
     
     /**

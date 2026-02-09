@@ -61,8 +61,17 @@ public class AgentService {
         // Register agents in priority order
         registerAgent(new ClearHistoryAgent(conversationHistoryService));
         registerAgent(new MirrorMeAgent(outputFilePath));
-        registerAgent(new ShowNavyShipsAgent(outputFilePath));
-        registerAgent(new ShowNavyEquipmentAgent(outputFilePath));
+
+        // Create ship and equipment agents, then register the list agent before them
+        // so "list ships" / "list equipment" is handled by ListAgentObjectsAgent
+        ShowNavyShipsAgent shipsAgent = new ShowNavyShipsAgent(outputFilePath);
+        ShowNavyEquipmentAgent equipmentAgent = new ShowNavyEquipmentAgent(outputFilePath);
+        List<Agent> listableAgents = new ArrayList<>();
+        listableAgents.add(shipsAgent);
+        listableAgents.add(equipmentAgent);
+        registerAgent(new ListAgentObjectsAgent(listableAgents));
+        registerAgent(shipsAgent);
+        registerAgent(equipmentAgent);
         registerAgent(new DigitalTwinAgent(outputFilePath));
         registerAgent(new SignAgent(outputFilePath));
         registerAgent(new VisionAIAgent(ociVisionEndpoint, ociCompartmentId, ociApiKey));
@@ -71,7 +80,7 @@ public class AgentService {
         registerAgent(new GamerAgent(openaiKey));
         
         // Oracle Doc Agent and Edge RAG Agent are autowired via Spring (@Component annotation)
-        registerAgent(oracleDocAgent);
+        // registerAgent(oracleDocAgent);
         registerAgent(edgeRAGAgent);
         
         // DirectLLMAgent is the preferred fallback if OpenAI key is available
@@ -149,8 +158,10 @@ public class AgentService {
             );
         }
         
-        // Strip trigger keywords before processing
-        String cleanedQuestion = stripTriggerKeywords(question, matchingAgent);
+        // Strip trigger keywords before processing (unless the agent needs the original)
+        String cleanedQuestion = matchingAgent.preserveOriginalQuestion()
+            ? question
+            : stripTriggerKeywords(question, matchingAgent);
         
         // Add word limit instruction if specified
         if (maxWords != null && maxWords > 0) {

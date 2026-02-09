@@ -61,8 +61,11 @@ public class DefaultFallbackAgent implements Agent {
         String response = chatGPTService.queryChatGPT(enhancedQuestion, "gpt-4");
         
         // Fallback to simple response if ChatGPT fails
-        if (response == null || response.contains("error") || response.contains("not configured")) {
-            return "I'm here to help!. However, the LLM seems to be unavailable at the moment.";
+        // Check for specific error prefixes from ChatGPTService, not the generic word "error"
+        if (response == null || response.startsWith("An error occurred") ||
+            response.startsWith("ChatGPT service is not configured") ||
+            response.startsWith("Sorry, I couldn't get a response")) {
+            return "I'm here to help! However, the LLM seems to be unavailable at the moment.";
         }
         
         return response;

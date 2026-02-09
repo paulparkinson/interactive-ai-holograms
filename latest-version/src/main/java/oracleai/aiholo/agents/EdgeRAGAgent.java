@@ -38,12 +38,13 @@ public class EdgeRAGAgent implements Agent {
     public String[][] getKeywords() {
         // Triggers on document-related queries, similar to OracleDocAgent
         return new String[][] {
+            {"search", "docs"},
+            {"search", "documentation"},
+            {"doc", "agent"},
+            {"documentation", "agent"},
             {"edge", "search"},
             {"edge", "documents"},
-            {"edge", "query"},
-            {"vector", "database"},
-            {"oracle", "vector"},
-            {"database", "search"},
+            {"edge", "doc"},
             {"rechercher" , "edge"}
         };
     }

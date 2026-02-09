@@ -45,7 +45,7 @@ public class ShowNavyShipsAgent implements Agent {
     
     @Override
     public String getName() {
-        return "Show Navy Ships Agent";
+        return "Navy Ships Agent";
     }
 
     @Override
@@ -70,6 +70,25 @@ public class ShowNavyShipsAgent implements Agent {
     @Override
     public boolean handlesOwnFileWriting() {
         return true;  // Writes dynamic ship-specific values
+    }
+
+    @Override
+    public boolean hasList() {
+        return true;
+    }
+
+    @Override
+    public String[] getListKeywords() {
+        return new String[] {"ship", "ships"};
+    }
+
+    @Override
+    public String[] getList() {
+        String[] list = new String[AVAILABLE_SHIPS.length];
+        for (int i = 0; i < AVAILABLE_SHIPS.length; i++) {
+            list[i] = formatShipName(AVAILABLE_SHIPS[i]);
+        }
+        return list;
     }
 
     @Override

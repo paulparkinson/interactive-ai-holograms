@@ -37,7 +37,7 @@ public class ShowNavyEquipmentAgent implements Agent {
     
     @Override
     public String getName() {
-        return "Show Navy Equipment Agent";
+        return "Navy Equipment Agent";
     }
 
     @Override
@@ -62,6 +62,25 @@ public class ShowNavyEquipmentAgent implements Agent {
     @Override
     public boolean handlesOwnFileWriting() {
         return true;  // Writes dynamic equipment-specific values
+    }
+
+    @Override
+    public boolean hasList() {
+        return true;
+    }
+
+    @Override
+    public String[] getListKeywords() {
+        return new String[] {"equipment", "gear"};
+    }
+
+    @Override
+    public String[] getList() {
+        String[] list = new String[AVAILABLE_EQUIPMENT.length];
+        for (int i = 0; i < AVAILABLE_EQUIPMENT.length; i++) {
+            list[i] = formatEquipmentName(AVAILABLE_EQUIPMENT[i]);
+        }
+        return list;
     }
 
     @Override

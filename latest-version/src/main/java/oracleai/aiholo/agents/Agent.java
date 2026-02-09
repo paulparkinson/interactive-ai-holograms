@@ -47,4 +47,34 @@ public interface Agent {
     default boolean handlesOwnFileWriting() {
         return false;
     }
+
+    /**
+     * @return true if this agent has a listable collection of objects
+     */
+    default boolean hasList() {
+        return false;
+    }
+
+    /**
+     * @return Keywords that, combined with "list", should trigger listing this agent's objects.
+     *         For example, {"ship", "ships"} means "list ships" will trigger listing.
+     */
+    default String[] getListKeywords() {
+        return new String[0];
+    }
+
+    /**
+     * @return The list of available object names for this agent
+     */
+    default String[] getList() {
+        return new String[0];
+    }
+
+    /**
+     * @return true if this agent needs the original question without keyword stripping.
+     *         Default is false (keywords are stripped before processQuestion is called).
+     */
+    default boolean preserveOriginalQuestion() {
+        return false;
+    }
 }

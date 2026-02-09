@@ -259,6 +259,20 @@ public class Configuration {
     public static String getAgenticTrainingSetPath() {
         return System.getenv("AGENTIC_TRAINING_SET_PATH");
     }
+
+    /**
+     * Get the training set mode: "strict" or "open".
+     * Strict mode only answers from the training set; open mode allows the LLM to answer freely.
+     * @return "strict" or "open", defaults to "open"
+     */
+    public static String getTrainingSetMode() {
+        String mode = System.getenv("TRAINING_SET_MODE");
+        return mode != null ? mode.toLowerCase() : "open";
+    }
+
+    public static boolean isTrainingSetStrict() {
+        return "strict".equals(getTrainingSetMode());
+    }
     
     // ========== Host and URL Configuration ==========
     public static String getAiholoHostUrl() {

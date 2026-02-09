@@ -93,9 +93,21 @@ public class AgenticTrainingSetService {
             return userQuestion;
         }
         
-        return "Treat the Oracle + Department of the Navy Agentic AI Training Set below as the authoritative source of truth. " +
-               "When answering a question that is related to the questions listed, synthesize the most relevant points from that set, " +
-               "maintain its language and priorities, and avoid introducing external positioning.\n\n" +
+        String instruction;
+        if (Configuration.isTrainingSetStrict()) {
+            instruction = "Answer the QUESTION based solely on the following Training Set. " +
+                    "If the Training Set does not contain enough information to answer the QUESTION, " +
+                    "say \"I don't have enough information to answer that question based on the provided documents.\" " +
+                    "Do not make up information not found in the Training Set.";
+        } else {
+            instruction = "Treat the Oracle + Department of the Navy Agentic AI Training Set below as the authoritative source of truth. " +
+                    "When answering a question that is related to the questions listed, synthesize the most relevant points from that set, " +
+                    "maintain its language and priorities, and avoid introducing external positioning. " +
+                    "If the Training Set does not cover the question, answer from your general knowledge. " +
+                    "Never mention the Training Set in your response or say that it does not contain the answer.";
+        }
+
+        return instruction + "\n\n" +
                "Training Set:\n" +
                trainingSetContent + "\n\n" +
                "Question: " + userQuestion;

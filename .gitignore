@@ -1,0 +1,82 @@
+# Sensitive files and credentials
+*.p12
+*.pem
+*.key
+*.crt
+*.cer
+*.jks
+*.keystore
+*.wallet
+*.env
+*.env.local
+*.env.production
+*.env.staging
+config/
+wallet/
+Wallet_*/
+
+# Database and connection strings
+application-*.yml
+application-*.yaml
+application.yaml
+application.yml
+*.properties
+
+# Logs
+*.log
+logs/
+
+# Temporary and build files
+target/
+build/
+*.class
+*.jar
+*.war
+*.zip
+*.tar.gz
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Node modules if any
+node_modules/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.env
+.venv
+
+# ONNX models (downloaded by scripts)
+*.onnx
+
+# Backup files
+*.bak
+*.backup
+*.old
+*~
+# Jupyter Notebook outputs
+**/.ipynb_checkpoints/
+**/[Uu]ntitled*.ipynb
+# Optionally ignore all execution outputs in notebooks:
+# *.ipynb

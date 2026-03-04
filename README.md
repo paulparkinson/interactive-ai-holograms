@@ -12,7 +12,7 @@ See blog for details
 - A `.env` file or exported environment variables for your deployment (see configuration section below)
 - The aiholo.jar file downloaded from [here]([https://www.linkedin.com/pulse/interactive-ai-holograms-develop-digital-double-oracle-paul-parkinson-zdpjf](https://storage.googleapis.com/ai-holo/aiholo.jar))
 
-### Start the application
+### Set configuratoin and start the application
 
 ```bash
 java -jar aiholo.jar
@@ -24,13 +24,6 @@ If your environment is set correctly, the app will start and serve the UI on:
 http://localhost:8082/aiholo
 ```
 
-That assumes your environment sets:
-
-```dotenv
-SERVER_PORT=8082
-AIHOLO_HOST_URL=http://localhost:8082
-```
-
 ## Configuration
 
 The JAR reads configuration from environment variables.
@@ -38,6 +31,9 @@ The JAR reads configuration from environment variables.
 Minimum commonly needed settings:
 
 ```dotenv
+SERVER_PORT=8082
+AIHOLO_HOST_URL=http://localhost:8082
+
 OPENAI_KEY=your-openai-api-key
 OPENAI_API_KEY=your-openai-api-key
 DB_USER=admin

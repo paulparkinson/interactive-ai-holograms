@@ -10,7 +10,7 @@ See blog for details
 
 - Java 21 or newer
 - A `.env` file or exported environment variables for your deployment (see configuration section below)
-- The aiholo.jar file downloaded from [here]([https://www.linkedin.com/pulse/interactive-ai-holograms-develop-digital-double-oracle-paul-parkinson-zdpjf](https://storage.googleapis.com/ai-holo/aiholo.jar))
+- The aiholo.jar file downloaded from [here](https://storage.googleapis.com/ai-holo/aiholo.jar)
 
 ### Set configuratoin and start the application
 

@@ -134,13 +134,19 @@ The sample env documents these values:
 | `aitoolkitagent` | Sandbox/toolkit integration |
 | `financialagent` | Financial flow integration |
 | `gameragent` | Game-oriented routing |
-| `edgeragagent` | Vector/database-backed RAG |
+| `ollamadbrag` | Ollama-based RAG via Oracle DB SQL function |
+| `springaivectorrag` | Spring AI VectorStore RAG with OpenAI embeddings |
+| `dbsqlagent` | Natural language to SQL via DBMS_CLOUD_AI |
+| `dbsummarizationagent` | In-database summarization via DBMS_VECTOR_CHAIN |
+| `dbpropertygraphagent` | Property graph queries via SQL/PGQ |
+| `springaichatagent` | Spring AI ChatClient with Oracle DB grounding |
+| `langchain4joraclerag` | Langchain4j OracleEmbeddingStore RAG |
+| `langchain4jtoolagent` | Langchain4j tool/function-calling with Oracle DB |
 | `generalagent` | Fallback routing value used by the built-in fallback agents |
 
 Notes:
 
 - Both `DirectLLMAgent` and `DefaultFallbackAgent` currently use `generalagent` as their `valueName`
-- `edgeragagent` is documented in `.env_example`, but the current Java implementation returns `edgerag` as its `valueName`
 - Built-in agents register before auto-discovered custom agents, so built-ins win when trigger keywords overlap
 
 ## Adding a Custom Agent
@@ -218,6 +224,23 @@ ENABLED_AGENTS=weatheragent
 - Return `false` from `isConfigured()` when required credentials or dependencies are missing
 
 
+
+## Database-Backed Agent Summary
+
+The following agents use Oracle Database 23ai. The key axis is **where inference runs** (in-DB vs external) and **which framework manages the interaction** (raw JDBC, Spring AI, Langchain4j).
+
+| Agent Name | Framework | LLM Location | DB Role | `valueName` |
+|---|---|---|---|---|
+| OllamaDBRAGAgent | JdbcTemplate | In-database (Ollama) | RAG + inference | `ollamadbrag` |
+| SpringAIVectorRAGAgent | Spring AI | External (OpenAI) | Vector store only | `springaivectorrag` |
+| DBSQLAgent | JdbcTemplate | In-database (DBMS_CLOUD_AI) | NL-to-SQL | `dbsqlagent` |
+| DBSummarizationAgent | JdbcTemplate | In-database (DBMS_VECTOR_CHAIN) | Summarization | `dbsummarizationagent` |
+| DBPropertyGraphAgent | JdbcTemplate | N/A (SQL/PGQ) | Graph queries | `dbpropertygraphagent` |
+| SpringAIChatAgent | Spring AI | External (OpenAI) | Tool/grounding backend | `springaichatagent` |
+| Langchain4jOracleRAGAgent | Langchain4j | External (any) | Vector store (OracleEmbeddingStore) | `langchain4joraclerag` |
+| Langchain4jToolAgent | Langchain4j | N/A | Tool/function backend | `langchain4jtoolagent` |
+
+**Non-database agents** (ShowNavyShips, VisionAI, Gamer, Financial, Sign, Mirror, etc.) use HTTP APIs, hardcoded data, or file I/O.
 
 Contact Paul Parkinson with any questions or recommendations.
 

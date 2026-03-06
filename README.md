@@ -113,9 +113,9 @@ ENABLED_AGENTS=visionagent,shipsagent,equipmentagent
 
 Behavior:
 
-- If `ENABLED_AGENTS` is unset or empty, all configured agents load
-- If `ENABLED_AGENTS` is set, only matching agents load
-- The fallback path is always registered with `alwaysLoad=true`
+- **`ENABLED_AGENTS` should be set in your `.env` file** — it controls which agents are active
+- Only agents whose `valueName` appears in the list will load
+- The fallback path (`DirectLLMAgent` / `DefaultFallbackAgent`) is always registered regardless
 - Custom `@Component` agents are also discovered and filtered by their `valueName`
 
 ### Built-in agent values
@@ -134,7 +134,8 @@ The sample env documents these values:
 | `aitoolkitagent` | Sandbox/toolkit integration |
 | `financialagent` | Financial flow integration |
 | `gameragent` | Game-oriented routing |
-| `ollamadbrag` | Ollama-based RAG via Oracle DB SQL function |
+| `indbonnxvectorrag` | In-DB ONNX vector RAG via Oracle SQL function |
+| `image` | Generate and display images via OpenAI DALL-E |
 | `springaivectorrag` | Spring AI VectorStore RAG with OpenAI embeddings |
 | `dbsqlagent` | Natural language to SQL via DBMS_CLOUD_AI |
 | `dbsummarizationagent` | In-database summarization via DBMS_VECTOR_CHAIN |
@@ -154,7 +155,7 @@ Notes:
 Custom agents are auto-discovered if they:
 
 - implement [`Agent`](latest-version/src/main/java/oracleai/aiholo/agents/Agent.java)
-- are on the application classpath
+- are on the application classpath (place the `.java` file under `src/main/java/oracleai/aiholo/agents/` in the source tree, or add the compiled `.class`/`.jar` to the classpath via `-cp` or by dropping it into the Spring Boot loader's `BOOT-INF/classes/` directory)
 - are annotated with `@Component`
 
 Minimal example:
@@ -229,18 +230,20 @@ ENABLED_AGENTS=weatheragent
 
 The following agents use Oracle Database 23ai. The key axis is **where inference runs** (in-DB vs external) and **which framework manages the interaction** (raw JDBC, Spring AI, Langchain4j).
 
-| Agent Name | Framework | LLM Location | DB Role | `valueName` |
-|---|---|---|---|---|
-| OllamaDBRAGAgent | JdbcTemplate | In-database (Ollama) | RAG + inference | `ollamadbrag` |
-| SpringAIVectorRAGAgent | Spring AI | External (OpenAI) | Vector store only | `springaivectorrag` |
-| DBSQLAgent | JdbcTemplate | In-database (DBMS_CLOUD_AI) | NL-to-SQL | `dbsqlagent` |
-| DBSummarizationAgent | JdbcTemplate | In-database (DBMS_VECTOR_CHAIN) | Summarization | `dbsummarizationagent` |
-| DBPropertyGraphAgent | JdbcTemplate | N/A (SQL/PGQ) | Graph queries | `dbpropertygraphagent` |
-| SpringAIChatAgent | Spring AI | External (OpenAI) | Tool/grounding backend | `springaichatagent` |
-| Langchain4jOracleRAGAgent | Langchain4j | External (any) | Vector store (OracleEmbeddingStore) | `langchain4joraclerag` |
-| Langchain4jToolAgent | Langchain4j | N/A | Tool/function backend | `langchain4jtoolagent` |
+> \* **SpringAIVectorRAGAgent is the most straightforward starting point** — it uses standard Spring AI APIs with OpenAI embeddings and requires minimal database-side setup. The examples below are included in the main library/distribution and are meant to be customized for your use case.
 
-**Non-database agents** (ShowNavyShips, VisionAI, Gamer, Financial, Sign, Mirror, etc.) use HTTP APIs, hardcoded data, or file I/O.
+| Agent Name | Description | Framework | LLM Location | DB Role | DB Prep Required | `valueName` |
+|---|---|---|---|---|---|---|
+| InDBOnnxVectorRAGAgent | Full in-database RAG: ONNX embeddings + Ollama or other LLM, all via a single SQL function call | JdbcTemplate | In-database (Ollama) | RAG + inference | Run `setup_onnx_vector_rag.sql` (creates ONNX model, vector table, and SQL function) | `indbonnxvectorrag` |
+| SpringAIVectorRAGAgent \* | Spring AI vector similarity search with OpenAI embeddings stored in Oracle | Spring AI | External (OpenAI) | Vector store only | Table auto-created by Spring AI on startup | `springaivectorrag` |
+| DBSQLAgent | Natural language to SQL — asks questions in English, gets answers from relational data | JdbcTemplate | In-database (DBMS_CLOUD_AI) | NL-to-SQL | Run `setup_dbms_cloud_ai.sql` (configures AI profile and credentials) | `dbsqlagent` |
+| DBSummarizationAgent | In-database document summarization without leaving Oracle | JdbcTemplate | In-database (DBMS_VECTOR_CHAIN) | Summarization | Run `setup_vector_chain.sql` (configures LLM credential for DBMS_VECTOR_CHAIN) | `dbsummarizationagent` |
+| DBPropertyGraphAgent | Relationship-based queries using SQL/PGQ graph pattern matching | JdbcTemplate | N/A (SQL/PGQ) | Graph queries | Run `setup_property_graph.sql` (CREATE PROPERTY GRAPH over your tables) | `dbpropertygraphagent` |
+| SpringAIChatAgent | Spring AI ChatClient with optional Oracle DB context for grounded responses | Spring AI | External (OpenAI) | Tool/grounding backend | None (uses existing tables for optional context) | `springaichatagent` |
+| Langchain4jOracleRAGAgent | Langchain4j vector search using OracleEmbeddingStore | Langchain4j | External (any) | Vector store (OracleEmbeddingStore) | Table auto-created by Langchain4j `OracleEmbeddingStore.builder()` | `langchain4joraclerag` |
+| Langchain4jToolAgent | Langchain4j tool/function-calling pattern backed by Oracle DB queries | Langchain4j | N/A | Tool/function backend | None (queries existing schema metadata) | `langchain4jtoolagent` |
+
+All database-backed agents share a single `DataSource` configured via `DataSourceConfiguration` (using `DB_USER`, `DB_PASSWORD`, `DB_URL` environment variables). Currently only one shared database can be specified; however, agents can create additional `DataSource` instances programmatically if they need to connect to a different database.
 
 Contact Paul Parkinson with any questions or recommendations.
 

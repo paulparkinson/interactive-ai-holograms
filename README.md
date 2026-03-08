@@ -4,6 +4,35 @@ Everything you need to know to build and run the Interactive AI Holograms exhibi
 See blog for details
 [here](https://www.linkedin.com/pulse/interactive-ai-holograms-develop-digital-double-oracle-paul-parkinson-zdpjf)
 
+## Example Questions
+
+Try these to trigger specific agents (via the web UI text box, or by holding the Z key and speaking):
+
+| Agent | Example question |
+|---|---|
+| Vision AI | "What do you see?" |
+| Generate Image | "Generate image of a futuristic city skyline at sunset" |
+| Edit Image (OpenAI) | "Edit image make it look like a painting" |
+| Imagen Edit Image (GCP) | "Imagen edit make it look like a watercolor" |
+| Navy Ships | "Show me the ship USS Enterprise" |
+| Navy Equipment | "Show me equipment for radar systems" |
+| Mirror Me | "Mirror me" |
+| Digital Twin | "Show the digital twin" |
+| Sign | "Change the sign to say Welcome" |
+| Clear History | "Clear history" |
+| In-DB ONNX Vector RAG | "Search docs for Oracle database security best practices" |
+| Spring AI Vector RAG | "Search documents about cloud architecture" |
+| DB SQL (NL-to-SQL) | "Ask the database how many orders were placed last month" |
+| DB Summarization | "Summarize the project requirements document" |
+| DB Property Graph | "Who is connected to the engineering department?" |
+| Spring AI Chat | "Chat with the database about inventory levels" |
+| Langchain4j RAG | "Langchain search for deployment procedures" |
+| Langchain4j Tool | "Langchain tool call to list database tables" |
+| AI Toolkit | "Run the sandbox optimizer" |
+| Financial | "Run the financial agent" |
+| Gamer | "Run the gamer agent" |
+| *(any other question)* | Falls through to the general-purpose LLM fallback agent |
+
 ## Run It
 
 ### Prerequisites
@@ -135,7 +164,9 @@ The sample env documents these values:
 | `financialagent` | Financial flow integration |
 | `gameragent` | Game-oriented routing |
 | `indbonnxvectorrag` | In-DB ONNX vector RAG via Oracle SQL function |
-| `image` | Generate and display images via OpenAI DALL-E |
+| `image` | Generate images from text via OpenAI DALL-E |
+| `editimage` | Capture webcam photo, modify it per user instruction via GPT-4o + DALL-E |
+| `imageneditimage` | Capture webcam photo, edit the actual image via Google Vertex AI Imagen |
 | `springaivectorrag` | Spring AI VectorStore RAG with OpenAI embeddings |
 | `dbsqlagent` | Natural language to SQL via DBMS_CLOUD_AI |
 | `dbsummarizationagent` | In-database summarization via DBMS_VECTOR_CHAIN |

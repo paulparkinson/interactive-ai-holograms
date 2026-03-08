@@ -13,7 +13,7 @@ Try these to trigger specific agents (via the web UI text box, or by holding the
 | Vision AI | "What do you see?" |
 | Generate Image | "Generate image of a futuristic city skyline at sunset" |
 | Edit Image (OpenAI) | "Edit image make it look like a painting" |
-| Imagen Edit Image (GCP) | "Imagen edit make it look like a watercolor" |
+| Imagen Edit Image (GCP) | "vertex edit make it look like a watercolor" |
 | Navy Ships | "Show me the ship USS Enterprise" |
 | Navy Equipment | "Show me equipment for radar systems" |
 | Mirror Me | "Mirror me" |

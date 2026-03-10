@@ -181,11 +181,55 @@ Notes:
 - Both `DirectLLMAgent` and `DefaultFallbackAgent` currently use `generalagent` as their `valueName`
 - Built-in agents register before auto-discovered custom agents, so built-ins win when trigger keywords overlap
 
+## Database-Backed Agent Summary
+
+The following agents use Oracle Database 23ai. The key axis is **where inference runs** (in-DB vs external) and **which framework manages the interaction** (raw JDBC, Spring AI, Langchain4j).
+
+> \* **SpringAIVectorRAGAgent is the most straightforward starting point** — it uses standard Spring AI APIs with OpenAI embeddings and requires minimal database-side setup. The examples below are included in the main library/distribution and are meant to be customized for your use case.
+
+| Agent Name | Description | Framework | LLM Location | DB Role | DB Prep Required | `valueName` |
+|---|---|---|---|---|---|---|
+| InDBOnnxVectorRAGAgent | Full in-database RAG: ONNX embeddings + Ollama or other LLM, all via a single SQL function call | JdbcTemplate | In-database (Ollama) | RAG + inference | Run `setup_onnx_vector_rag.sql` (creates ONNX model, vector table, and SQL function) | `indbonnxvectorrag` |
+| SpringAIVectorRAGAgent \* | Spring AI vector similarity search with OpenAI embeddings stored in Oracle | Spring AI | External (OpenAI) | Vector store only | Table auto-created by Spring AI on startup | `springaivectorrag` |
+| DBSQLAgent | Natural language to SQL — asks questions in English, gets answers from relational data | JdbcTemplate | In-database (DBMS_CLOUD_AI) | NL-to-SQL | Run `setup_dbms_cloud_ai.sql` (configures AI profile and credentials) | `dbsqlagent` |
+| DBSummarizationAgent | In-database document summarization without leaving Oracle | JdbcTemplate | In-database (DBMS_VECTOR_CHAIN) | Summarization | Run `setup_vector_chain.sql` (configures LLM credential for DBMS_VECTOR_CHAIN) | `dbsummarizationagent` |
+| DBPropertyGraphAgent | Relationship-based queries using SQL/PGQ graph pattern matching | JdbcTemplate | N/A (SQL/PGQ) | Graph queries | Run `setup_property_graph.sql` (CREATE PROPERTY GRAPH over your tables) | `dbpropertygraphagent` |
+| SpringAIChatAgent | Spring AI ChatClient with optional Oracle DB context for grounded responses | Spring AI | External (OpenAI) | Tool/grounding backend | None (uses existing tables for optional context) | `springaichatagent` |
+| Langchain4jOracleRAGAgent | Langchain4j vector search using OracleEmbeddingStore | Langchain4j | External (any) | Vector store (OracleEmbeddingStore) | Table auto-created by Langchain4j `OracleEmbeddingStore.builder()` | `langchain4joraclerag` |
+| Langchain4jToolAgent | Langchain4j tool/function-calling pattern backed by Oracle DB queries | Langchain4j | N/A | Tool/function backend | None (queries existing schema metadata) | `langchain4jtoolagent` |
+
+All database-backed agents share a single `DataSource` configured via `DataSourceConfiguration` (using `DB_USER`, `DB_PASSWORD`, `DB_URL` environment variables). Currently only one shared database can be specified; however, agents can create additional `DataSource` instances programmatically if they need to connect to a different database.
+
+### Vector Store Table
+
+The `SpringAIVectorRAGAgent` uses `OracleDBVectorStore`, which manages the vector store table in Oracle Database. The table is **auto-created at startup** if it does not already exist. The schema is:
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | `NUMBER GENERATED AS IDENTITY` (PK) | Auto-generated row ID |
+| `text` | `CLOB` | The document text chunk |
+| `embeddings` | `VECTOR` | OpenAI embedding vector (stored using Oracle 23ai native VECTOR type) |
+| `metadata` | `JSON` | Document metadata (source file, page number, etc.) |
+
+PDFs are uploaded via the `/vectorrag` UI, split into chunks by `TokenTextSplitter`, embedded using OpenAI's `text-embedding-ada-002`, and inserted into the table. Similarity search uses Oracle's built-in vector distance functions (`COSINE_DISTANCE`, `L2_DISTANCE`, etc.) with no external vector database required.
+
+The table name, distance metric, and startup behavior are configured in `application.yaml`:
+
+```yaml
+vectorrag:
+  table-name: ${VECTORRAG_TABLE_NAME:vector_store}
+  drop-at-startup: ${VECTORRAG_DROP_AT_STARTUP:false}
+  distance-metric: ${VECTORRAG_DISTANCE_METRIC:COSINE}
+  temp-dir: ${VECTORRAG_TEMP_DIR:tempDir}
+```
+
+These can also be overridden via environment variables (`VECTORRAG_TABLE_NAME`, `VECTORRAG_DISTANCE_METRIC`, etc.). The default table name is `vector_store` and the default distance metric is `COSINE`.
+
 ## Adding a Custom Agent
 
 Custom agents are auto-discovered if they:
 
-- implement [`Agent`](latest-version/src/main/java/oracleai/aiholo/agents/Agent.java)
+- implement [`Agent`](src/main/java/oracleai/aiholo/agents/Agent.java)
 - are on the application classpath (place the `.java` file under `src/main/java/oracleai/aiholo/agents/` in the source tree, or add the compiled `.class`/`.jar` to the classpath via `-cp` or by dropping it into the Spring Boot loader's `BOOT-INF/classes/` directory)
 - are annotated with `@Component`
 
@@ -254,27 +298,6 @@ ENABLED_AGENTS=weatheragent
 - Empty `getKeywords()` makes an agent behave like a fallback
 - Use unique keywords if you do not want a built-in agent to match first
 - Return `false` from `isConfigured()` when required credentials or dependencies are missing
-
-
-
-## Database-Backed Agent Summary
-
-The following agents use Oracle Database 23ai. The key axis is **where inference runs** (in-DB vs external) and **which framework manages the interaction** (raw JDBC, Spring AI, Langchain4j).
-
-> \* **SpringAIVectorRAGAgent is the most straightforward starting point** — it uses standard Spring AI APIs with OpenAI embeddings and requires minimal database-side setup. The examples below are included in the main library/distribution and are meant to be customized for your use case.
-
-| Agent Name | Description | Framework | LLM Location | DB Role | DB Prep Required | `valueName` |
-|---|---|---|---|---|---|---|
-| InDBOnnxVectorRAGAgent | Full in-database RAG: ONNX embeddings + Ollama or other LLM, all via a single SQL function call | JdbcTemplate | In-database (Ollama) | RAG + inference | Run `setup_onnx_vector_rag.sql` (creates ONNX model, vector table, and SQL function) | `indbonnxvectorrag` |
-| SpringAIVectorRAGAgent \* | Spring AI vector similarity search with OpenAI embeddings stored in Oracle | Spring AI | External (OpenAI) | Vector store only | Table auto-created by Spring AI on startup | `springaivectorrag` |
-| DBSQLAgent | Natural language to SQL — asks questions in English, gets answers from relational data | JdbcTemplate | In-database (DBMS_CLOUD_AI) | NL-to-SQL | Run `setup_dbms_cloud_ai.sql` (configures AI profile and credentials) | `dbsqlagent` |
-| DBSummarizationAgent | In-database document summarization without leaving Oracle | JdbcTemplate | In-database (DBMS_VECTOR_CHAIN) | Summarization | Run `setup_vector_chain.sql` (configures LLM credential for DBMS_VECTOR_CHAIN) | `dbsummarizationagent` |
-| DBPropertyGraphAgent | Relationship-based queries using SQL/PGQ graph pattern matching | JdbcTemplate | N/A (SQL/PGQ) | Graph queries | Run `setup_property_graph.sql` (CREATE PROPERTY GRAPH over your tables) | `dbpropertygraphagent` |
-| SpringAIChatAgent | Spring AI ChatClient with optional Oracle DB context for grounded responses | Spring AI | External (OpenAI) | Tool/grounding backend | None (uses existing tables for optional context) | `springaichatagent` |
-| Langchain4jOracleRAGAgent | Langchain4j vector search using OracleEmbeddingStore | Langchain4j | External (any) | Vector store (OracleEmbeddingStore) | Table auto-created by Langchain4j `OracleEmbeddingStore.builder()` | `langchain4joraclerag` |
-| Langchain4jToolAgent | Langchain4j tool/function-calling pattern backed by Oracle DB queries | Langchain4j | N/A | Tool/function backend | None (queries existing schema metadata) | `langchain4jtoolagent` |
-
-All database-backed agents share a single `DataSource` configured via `DataSourceConfiguration` (using `DB_USER`, `DB_PASSWORD`, `DB_URL` environment variables). Currently only one shared database can be specified; however, agents can create additional `DataSource` instances programmatically if they need to connect to a different database.
 
 Contact Paul Parkinson with any questions or recommendations.
 

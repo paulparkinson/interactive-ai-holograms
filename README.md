@@ -10,28 +10,12 @@ Try these to trigger specific agents (via the web UI text box, or by holding the
 
 | Agent | Example question |
 |---|---|
-| Vision AI | "What do you see?" |
-| Generate Image | "Generate image of a futuristic city skyline at sunset" |
-| Edit Image (OpenAI) | "Edit image make it look like a painting" |
-| Imagen Edit Image (GCP) | "vertex edit make it look like a watercolor" |
-| Navy Ships | "Show me the ship USS Enterprise" |
-| Navy Equipment | "Show me equipment for radar systems" |
+| LLM only (the default) | "What is a vector search?"|
+| Spring AI Vector RAG | "What are the latest features in the Oracle database, use RAG" |
+| In-DB ONNX Vector RAG | "What are the latest features in the Oracle database, use RAG" |
 | Mirror Me | "Mirror me" |
-| Digital Twin | "Show the digital twin" |
-| Sign | "Change the sign to say Welcome" |
+| Financial | "Describe my stock portfolio, use financial agent" |
 | Clear History | "Clear history" |
-| In-DB ONNX Vector RAG | "Search docs for Oracle database security best practices" |
-| Spring AI Vector RAG | "Search documents about cloud architecture" |
-| DB SQL (NL-to-SQL) | "Ask the database how many orders were placed last month" |
-| DB Summarization | "Summarize the project requirements document" |
-| DB Property Graph | "Who is connected to the engineering department?" |
-| Spring AI Chat | "Chat with the database about inventory levels" |
-| Langchain4j RAG | "Langchain search for deployment procedures" |
-| Langchain4j Tool | "Langchain tool call to list database tables" |
-| AI Toolkit | "Run the sandbox optimizer" |
-| Financial | "Run the financial agent" |
-| Gamer | "Run the gamer agent" |
-| *(any other question)* | Falls through to the general-purpose LLM fallback agent |
 
 ## Run It
 
@@ -41,7 +25,82 @@ Try these to trigger specific agents (via the web UI text box, or by holding the
 - A `.env` file or exported environment variables for your deployment (see configuration section below)
 - The aiholo.jar file downloaded from [here](https://storage.googleapis.com/ai-holo/aiholo.jar)
 
-### Set configuratoin and start the application
+## Database, Speech AI, and LLM Setup
+
+### Oracle Database with Vector Support
+
+Run Oracle 26ai Free with native VECTOR support using Docker:
+
+```bash
+docker run -d \
+  --name oracle-free \
+  --restart unless-stopped \
+  -p 1521:1521 \
+  -e ORACLE_PWD=<your-password> \
+  -v /path/to/data/oracle:/opt/oracle/oradata \
+  --cpus="8.0" \
+  --memory="64g" \
+  container-registry.oracle.com/database/free:latest
+```
+
+**Connection details:**
+- Host: `localhost` (or your server IP for remote access)
+- Port: `1521`
+- Service: `FREEPDB1`
+- User: `SYSTEM` or `PDBADMIN`
+- Password: `<your-password>`
+
+**Note:** For a complete development stack with Python FastAPI + Spring Boot + Oracle Vector Search, see the [oracleaidatabase-devenv-util](oracleaidatabase-devenv-util/) folder.
+
+### Ollama (Local LLM)
+
+Install Ollama and pull recommended models:
+
+```bash
+# Install Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Pull recommended models
+ollama pull llama3.2      # Fast general-purpose model (3B params)
+ollama pull mistral       # Strong reasoning model (7B params)
+ollama pull nomic-embed-text  # Text embedding model for RAG
+
+# Verify installation
+ollama list
+```
+
+**API endpoint:** `http://localhost:11434`
+
+For in-database Ollama integration with Oracle, ensure Ollama is accessible from the database server and configure using `DBMS_CLOUD_AI` or `DBMS_VECTOR_CHAIN`.
+
+### Google Cloud Speech AI
+
+Install and configure Google Cloud SDK for speech-to-text and text-to-speech:
+
+```bash
+# Install gcloud CLI
+curl https://sdk.cloud.google.com | bash
+exec -l $SHELL
+
+# Initialize and authenticate
+gcloud init
+gcloud auth application-default login
+
+# Enable required APIs
+gcloud services enable speech.googleapis.com
+gcloud services enable texttospeech.googleapis.com
+
+# Set project (replace with your project ID)
+gcloud config set project YOUR_PROJECT_ID
+```
+
+**Required environment variables:**
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
+export GOOGLE_CLOUD_PROJECT=your-project-id
+```
+
+### Set Configuration and Start the Application
 
 ```bash
 java -jar aiholo.jar
@@ -68,8 +127,6 @@ OPENAI_API_KEY=your-openai-api-key
 DB_USER=admin
 DB_PASSWORD=your-database-password
 DB_URL=jdbc:oracle:thin:@yourdb_high?TNS_ADMIN=/path/to/Wallet_yourdb
-SERVER_PORT=8082
-AIHOLO_HOST_URL=http://localhost:8082
 OUTPUT_FILE_PATH=/path/to/aiholo_output.txt
 ```
 
@@ -302,7 +359,7 @@ ENABLED_AGENTS=weatheragent
 Contact Paul Parkinson with any questions or recommendations.
 
 
-This repos... 
+This repo... 
 
 ![aiholo repos qr code](images/bit.ly_interactive-ai-holograms.png "this")
 

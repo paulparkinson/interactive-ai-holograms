@@ -62,6 +62,7 @@ Install Ollama and pull recommended models:
 curl -fsSL https://ollama.com/install.sh | sh
 
 # Pull recommended models
+ollama pull qwen2.5:7b    # Best overall
 ollama pull llama3.2      # Fast general-purpose model (3B params)
 ollama pull mistral       # Strong reasoning model (7B params)
 ollama pull nomic-embed-text  # Text embedding model for RAG

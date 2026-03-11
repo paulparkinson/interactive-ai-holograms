@@ -70,7 +70,7 @@ ollama pull nomic-embed-text  # Text embedding model for RAG
 # Verify installation
 ollama list
 
-# test model with ollam or via API...
+# test model with ollama or via API...
 ollama run llama3.2
 
 curl http://localhost:11434/api/generate -d '{
@@ -80,6 +80,21 @@ curl http://localhost:11434/api/generate -d '{
 ```
 
 **API endpoint:** `http://localhost:11434`
+
+**To accept requests from other machines** (required for database integration), set the host to listen on all interfaces:
+
+```bash
+# Set environment variable
+export OLLAMA_HOST=0.0.0.0:11434
+
+# Restart Ollama service
+systemctl restart ollama  # On Linux with systemd
+# or
+pkill ollama && ollama serve  # Manual restart
+
+# Verify it's listening on all interfaces
+netstat -tlnp | grep 11434
+```
 
 For in-database Ollama integration with Oracle, ensure Ollama is accessible from the database server and configure using `DBMS_CLOUD_AI` or `DBMS_VECTOR_CHAIN`.
 

@@ -17,13 +17,14 @@ Try these to trigger specific agents (via the web UI text box, or by holding the
 | Financial | "Describe my stock portfolio, use financial agent" |
 | Clear History | "Clear history" |
 
-## Run It
+## Build And Run It
 
 ### Prerequisites
 
+- Database, Speech AI, and LLM Setup as described in the next section below
 - Java 21 or newer
-- A `.env` file or exported environment variables for your deployment (see configuration section below)
 - The aiholo.jar file downloaded from [here](https://storage.googleapis.com/ai-holo/aiholo.jar)
+- An `.env` file or exported environment variables for your deployment (see configuration section below and .env_example)
 
 ## Database, Speech AI, and LLM Setup
 
@@ -67,6 +68,14 @@ ollama pull nomic-embed-text  # Text embedding model for RAG
 
 # Verify installation
 ollama list
+
+# test model with ollam or via API...
+ollama run llama3.2
+
+curl http://localhost:11434/api/generate -d '{
+  "model": "llama3.2",
+  "prompt": "Say hello in one sentence."
+}'
 ```
 
 **API endpoint:** `http://localhost:11434`

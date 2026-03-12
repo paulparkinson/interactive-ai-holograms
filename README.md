@@ -11,8 +11,8 @@ Try these to trigger specific agents (via the web UI text box, or by holding the
 | Agent | Example question |
 |---|---|
 | LLM only (the default) | "What is a vector search?"|
-| Spring AI Vector RAG | "What are the latest features in the Oracle database, use RAG" |
-| In-DB ONNX Vector RAG | "What are the latest features in the Oracle database, use RAG" |
+| Spring AI Vector RAG | "Search documents about Oracle database features" |
+| In-DB ONNX Vector RAG | "Search docs for Oracle database security best practices" |
 | Mirror Me | "Mirror me" |
 | Financial | "Describe my stock portfolio, use financial agent" |
 | Clear History | "Clear history" |
@@ -147,8 +147,15 @@ Minimum commonly needed settings:
 SERVER_PORT=8082
 AIHOLO_HOST_URL=http://localhost:8082
 
-OPENAI_KEY=your-openai-api-key
+# LLM provider: openai, claude, ollama, gemini
+DEFAULT_LLM_PROVIDER=openai
 OPENAI_API_KEY=your-openai-api-key
+
+# For local/offline LLM instead:
+# DEFAULT_LLM_PROVIDER=ollama
+# OLLAMA_URL=http://localhost:11434
+# OLLAMA_MODEL=mistral:latest
+
 DB_USER=admin
 DB_PASSWORD=your-database-password
 DB_URL=jdbc:oracle:thin:@yourdb_high?TNS_ADMIN=/path/to/Wallet_yourdb
@@ -185,7 +192,6 @@ OPENWAKEWORD_MODEL=hey_jarvis
 PowerShell:
 
 ```powershell
-$env:OPENAI_KEY="your-openai-api-key"
 $env:OPENAI_API_KEY="your-openai-api-key"
 $env:DB_USER="admin"
 $env:DB_PASSWORD="your-database-password"
@@ -198,7 +204,6 @@ java -jar target/aiholo.jar
 Bash:
 
 ```bash
-export OPENAI_KEY="your-openai-api-key"
 export OPENAI_API_KEY="your-openai-api-key"
 export DB_USER="admin"
 export DB_PASSWORD="your-database-password"
@@ -262,6 +267,27 @@ Notes:
 
 - Both `DirectLLMAgent` and `DefaultFallbackAgent` currently use `generalagent` as their `valueName`
 - Built-in agents register before auto-discovered custom agents, so built-ins win when trigger keywords overlap
+
+## Default LLM Provider
+
+The fallback/default agent supports multiple LLM providers, controlled by a single env var:
+
+| Provider | `DEFAULT_LLM_PROVIDER` | API Key | Model env var | Default model |
+|---|---|---|---|---|
+| OpenAI | `openai` (default) | `OPENAI_API_KEY` | `OPENAI_MODEL` | `gpt-4` |
+| Ollama (local) | `ollama` | None needed | `OLLAMA_MODEL` | `mistral:latest` |
+| Claude | `claude` | `CLAUDE_API_KEY` | `CLAUDE_MODEL` | `claude-sonnet-4-20250514` |
+| Gemini | `gemini` | `GEMINI_API_KEY` | `GEMINI_MODEL` | `gemini-2.0-flash` |
+
+For fully offline operation, use Ollama:
+
+```dotenv
+DEFAULT_LLM_PROVIDER=ollama
+OLLAMA_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2:3b
+```
+
+The provider is set at startup. The `LLMService` handles all REST API differences internally — agents just call `llmService.query(prompt)`.
 
 ## Database-Backed Agent Summary
 
@@ -384,7 +410,5 @@ ENABLED_AGENTS=weatheragent
 Contact Paul Parkinson with any questions or recommendations.
 
 
-This repo... 
-
-![aiholo repos qr code](images/bit.ly_interactive-ai-holograms.png "this")
+![aiholo repos qr code](images/bit.ly_interactive-ai-holograms.png "Interactive AI Holograms")
 

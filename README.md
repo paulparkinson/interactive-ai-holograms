@@ -125,6 +125,62 @@ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 export GOOGLE_CLOUD_PROJECT=your-project-id
 ```
 
+### Local/Offline Speech AI (no cloud required)
+
+For fully offline STT and TTS, use Whisper and Piper instead of Google Cloud.
+
+**Whisper STT** — local speech-to-text via an OpenAI-compatible API server:
+
+```bash
+# Install faster-whisper-server (Python)
+pip install faster-whisper-server
+
+# Start the server
+faster-whisper-server --host 0.0.0.0 --port 8000
+```
+
+```dotenv
+STT_ENGINE=WHISPER
+WHISPER_URL=http://localhost:8000
+WHISPER_MODEL=base
+```
+
+Models are downloaded automatically on first use. Larger models (`small`, `medium`, `large-v3`) are more accurate but slower.
+
+**Piper TTS** — fast local text-to-speech using ONNX models:
+
+1. Download Piper from [GitHub releases](https://github.com/rhasspy/piper/releases)
+2. Download a voice model from [HuggingFace](https://huggingface.co/rhasspy/piper-voices) (`.onnx` + `.onnx.json` files)
+
+```dotenv
+TTS_ENGINE=PIPER
+PIPER_EXE_PATH=/path/to/piper
+PIPER_MODEL_PATH=/path/to/en_US-kathleen-low.onnx
+```
+
+**Fully offline stack** — complete `.env` snippet for zero-internet operation:
+
+```dotenv
+# LLM — local Ollama
+DEFAULT_LLM_PROVIDER=ollama
+OLLAMA_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2:3b
+
+# STT — local Whisper
+STT_ENGINE=WHISPER
+WHISPER_URL=http://localhost:8000
+WHISPER_MODEL=base
+
+# TTS — local Piper
+TTS_ENGINE=PIPER
+PIPER_EXE_PATH=/path/to/piper
+PIPER_MODEL_PATH=/path/to/en_US-kathleen-low.onnx
+```
+
+No API keys, no cloud accounts, no internet required. Combine with Oracle Database for in-DB vector RAG to complete the stack.
+
+> **Note:** Piper is recommended over Coqui for local TTS. Coqui TTS (the company) shut down in 2023 and the open-source project is no longer maintained. Piper is actively developed, faster on CPU, has more voice models, and requires no Python runtime.
+
 ### Set Configuration and Start the Application
 
 ```bash
@@ -136,6 +192,15 @@ If your environment is set correctly, the app will start and serve the UI on:
 ```text
 http://localhost:8082/aiholo
 ```
+
+## Input Methods
+
+There are two ways to send questions to the application. Both go through the same `AgentService.processQuestion()` pipeline, so `ENABLED_AGENTS`, `AGENT_ROUTING_MODE`, and all other agent settings apply equally to both.
+
+| Input method | How it works | Config |
+|---|---|---|
+| **Web UI** | Browser-based interface at `/aiholo` — type a question or click the microphone to record audio | Always available |
+| **Hotkey / Voice Assistant** | System-wide hotkeys (Z = speak, X = speak + webcam, A hold = stop audio) and optional wake-word detection (Porcupine or OpenWakeWord) | `ENABLE_GLOBAL_HOTKEY`, `ENABLE_VOICE_ASSISTANT` |
 
 ## Configuration
 
@@ -233,6 +298,7 @@ Behavior:
 - Only agents whose `valueName` appears in the list will load
 - The fallback path (`DirectLLMAgent` / `DefaultFallbackAgent`) is always registered regardless
 - Custom `@Component` agents are also discovered and filtered by their `valueName`
+- This filter applies to **all input methods** — both the web UI and the hotkey/voice assistant go through `AgentService.processQuestion()`, so the same set of agents is available everywhere
 
 ### Built-in agent values
 
@@ -267,6 +333,22 @@ Notes:
 
 - Both `DirectLLMAgent` and `DefaultFallbackAgent` currently use `generalagent` as their `valueName`
 - Built-in agents register before auto-discovered custom agents, so built-ins win when trigger keywords overlap
+
+### Agent Routing Mode
+
+By default, questions are routed to agents via keyword matching (`getKeywords()`). You can optionally let the configured LLM pick the best agent instead:
+
+```dotenv
+# keyword = fast, deterministic keyword matching (default)
+# llm     = LLM reads each agent's description and picks the best match
+AGENT_ROUTING_MODE=keyword
+```
+
+When `AGENT_ROUTING_MODE=llm`, the system builds a prompt listing all registered agents with their `getAgentDescription()` text and asks the LLM to return the index of the best match. If the LLM returns "none" or fails, it falls back to keyword matching automatically.
+
+**Trade-offs:**
+- `keyword` — instant, no extra LLM call, deterministic, requires users to use trigger phrases
+- `llm` — handles natural phrasing ("can you look at that ISO doc?" routes to the RAG agent), but adds one LLM round-trip per question
 
 ## Default LLM Provider
 
@@ -359,6 +441,11 @@ public class WeatherAgent implements Agent {
     @Override
     public String getValueName() {
         return "weatheragent";
+    }
+
+    @Override
+    public String getAgentDescription() {
+        return "Answers questions about current weather, forecasts, and temperature.";
     }
 
     @Override
